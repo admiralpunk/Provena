@@ -1,0 +1,40 @@
+# Local instructions and planning
+/AGENTS.md
+/README.md
+/planning/
+/docs/
+
+# Python environments and build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test and analysis output
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+.codex/
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+*.ini
+__init__.*
+
+# Runtime output
+*.log

@@ -1,0 +1,474 @@
+import hashlib
+import json
+import secrets
+from datetime import datetime, timezone
+from typing import Annotated, Any
+from uuid import UUID
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from .domain import ALLOWED_TRANSITIONS, SOURCE_AUTHORITY, ClaimStatus, ConflictDecision, CredentialRole, MemoryActionKind, RelationshipKind, ScopeKind, SourceKind
+from .models import Agent, Claim, ClaimRelationship, ConflictReview, Credential, Event, Evidence, MemoryAction, Organization, Project, RetrievalEvent, RetrievalItem, Scope, Session as AgentSession
+
+
+class Settings(BaseSettings):
+    database_url: str = "postgresql+psycopg://provena:provena_dev@localhost:5437/provena"
+    bootstrap_token: str = ""
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+class OrganizationIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class CredentialIn(BaseModel):
+    role: CredentialRole
+    label: str = Field(min_length=1, max_length=200)
+
+
+class ReviewIn(BaseModel):
+    decision: ConflictDecision
+    reason: str = Field(min_length=1, max_length=2000)
+    superseding_claim_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def check_direction(self):
+        if (self.decision == ConflictDecision.TEMPORAL_CHANGE) != (self.superseding_claim_id is not None):
+            raise ValueError("temporal_change requires superseding_claim_id; other decisions must omit it")
+        return self
+
+
+class NameIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScopeIn(BaseModel):
+    kind: ScopeKind
+    project_id: UUID
+    parent_id: UUID
+    key: str = Field(min_length=1, max_length=200)
+
+
+class SessionIn(BaseModel):
+    scope_id: UUID
+    agent_id: UUID | None = None
+    external_ref: str | None = Field(default=None, max_length=200)
+
+
+class EventIn(BaseModel):
+    scope_id: UUID
+    session_id: UUID | None = None
+    source_kind: SourceKind
+    actor_ref: str | None = Field(default=None, max_length=200)
+    payload: dict[str, Any]
+
+
+class ClaimIn(BaseModel):
+    scope_id: UUID
+    subject: str = Field(min_length=1, max_length=300)
+    predicate: str = Field(min_length=1, max_length=200)
+    value: dict[str, Any]
+    evidence_event_ids: list[UUID] = Field(min_length=1)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def check_times(self):
+        for value in (self.valid_from, self.valid_to):
+            if value is not None and value.tzinfo is None:
+                raise ValueError("validity timestamps require an offset")
+        if self.valid_from and self.valid_to and self.valid_from >= self.valid_to:
+            raise ValueError("valid_from must precede valid_to")
+        if len(set(self.evidence_event_ids)) != len(self.evidence_event_ids):
+            raise ValueError("duplicate evidence event")
+        return self
+
+
+class PropositionIn(BaseModel):
+    subject: str = Field(min_length=1, max_length=300)
+    predicate: str = Field(min_length=1, max_length=200)
+    value: dict[str, Any]
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def check_times(self):
+        for value in (self.valid_from, self.valid_to):
+            if value is not None and value.tzinfo is None:
+                raise ValueError("validity timestamps require an offset")
+        if self.valid_from and self.valid_to and self.valid_from >= self.valid_to:
+            raise ValueError("valid_from must precede valid_to")
+        return self
+
+
+class MemoryIn(BaseModel):
+    scope_id: UUID
+    session_id: UUID | None = None
+    source_kind: SourceKind
+    actor_ref: str | None = Field(default=None, max_length=200)
+    text: str = Field(min_length=1)
+    proposition: PropositionIn | None = None
+
+    @model_validator(mode="after")
+    def check_text(self):
+        if not self.text.strip():
+            raise ValueError("memory text is required")
+        return self
+
+
+class StatusIn(BaseModel):
+    status: ClaimStatus
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class RelationshipIn(BaseModel):
+    from_claim_id: UUID
+    to_claim_id: UUID
+    kind: RelationshipKind
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+def require(row, what: str):
+    if row is None:
+        raise HTTPException(404, f"{what} not found")
+    return row
+
+
+def overlap(a: Claim, b: Claim) -> bool:
+    return (a.valid_to is None or b.valid_from is None or a.valid_to > b.valid_from) and (b.valid_to is None or a.valid_from is None or b.valid_to > a.valid_from)
+
+
+def claim_view(row: Claim) -> dict:
+    return {"id": row.id, "scope_id": row.scope_id, "subject": row.subject, "predicate": row.predicate, "value": row.value, "status": row.status, "status_version": row.status_version, "valid_from": row.valid_from, "valid_to": row.valid_to, "recorded_at": row.recorded_at}
+
+
+def actor(principal: Credential) -> str:
+    return f"credential:{principal.id}"
+
+
+def require_human(principal: Credential) -> None:
+    if principal.role != CredentialRole.HUMAN.value:
+        raise HTTPException(403, "human review credential required")
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or Settings()
+    engine = create_engine(settings.database_url, pool_pre_ping=True)
+    factory = sessionmaker(engine, expire_on_commit=False)
+    app = FastAPI(title="Provena", version="0.1.0")
+
+    def db_session():
+        with factory() as db:
+            try:
+                yield db
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    Db = Annotated[Session, Depends(db_session, scope="function")]
+
+    def current_credential(db: Db, x_api_key: Annotated[str | None, Header()] = None) -> Credential:
+        if not x_api_key:
+            raise HTTPException(401, "API key required")
+        digest = hashlib.sha256(x_api_key.encode()).hexdigest()
+        row = db.scalar(select(Credential).where(Credential.key_hash == digest, Credential.revoked_at.is_(None)))
+        if not row:
+            raise HTTPException(401, "invalid API key")
+        return row
+
+    Principal = Annotated[Credential, Depends(current_credential)]
+
+    def tenant(principal: Principal) -> UUID:
+        return principal.organization_id
+
+    Tenant = Annotated[UUID, Depends(tenant)]
+
+    def check_bootstrap(token: str | None) -> None:
+        if not settings.bootstrap_token or not token or not secrets.compare_digest(token, settings.bootstrap_token):
+            raise HTTPException(403, "bootstrap unavailable")
+
+    @app.post("/organizations", status_code=201)
+    def create_organization(body: OrganizationIn, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):
+        check_bootstrap(x_bootstrap_token)
+        key = secrets.token_urlsafe(32)
+        row = Organization(name=body.name)
+        db.add(row)
+        db.flush()
+        credential = Credential(organization_id=row.id, key_hash=hashlib.sha256(key.encode()).hexdigest(), role=CredentialRole.AGENT.value, label="initial agent key")
+        db.add(credential)
+        root = Scope(organization_id=row.id, kind=ScopeKind.ORGANIZATION.value, key="organization")
+        db.add(root)
+        db.flush()
+        return {"id": row.id, "root_scope_id": root.id, "credential_id": credential.id, "api_key": key}
+
+    @app.post("/organizations/{organization_id}/credentials", status_code=201)
+    def issue_credential(organization_id: UUID, body: CredentialIn, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):
+        check_bootstrap(x_bootstrap_token)
+        require(db.get(Organization, organization_id), "organization")
+        key = secrets.token_urlsafe(32)
+        row = Credential(organization_id=organization_id, key_hash=hashlib.sha256(key.encode()).hexdigest(), role=body.role.value, label=body.label)
+        db.add(row)
+        db.flush()
+        return {"id": row.id, "role": row.role, "label": row.label, "api_key": key}
+
+    @app.post("/organizations/{organization_id}/credentials/{credential_id}/rotate")
+    def rotate_credential(organization_id: UUID, credential_id: UUID, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):
+        check_bootstrap(x_bootstrap_token)
+        old = require(db.scalar(select(Credential).where(Credential.organization_id == organization_id, Credential.id == credential_id).with_for_update()), "credential")
+        if old.revoked_at is not None:
+            raise HTTPException(409, "credential already revoked")
+        key = secrets.token_urlsafe(32)
+        replacement = Credential(organization_id=organization_id, key_hash=hashlib.sha256(key.encode()).hexdigest(), role=old.role, label=old.label)
+        db.add(replacement)
+        db.flush()
+        old.revoked_at = datetime.now(timezone.utc)
+        db.flush()
+        return {"id": replacement.id, "replaces": old.id, "role": replacement.role, "api_key": key}
+
+    @app.post("/organizations/{organization_id}/credentials/{credential_id}/revoke")
+    def revoke_credential(organization_id: UUID, credential_id: UUID, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):
+        check_bootstrap(x_bootstrap_token)
+        row = require(db.scalar(select(Credential).where(Credential.organization_id == organization_id, Credential.id == credential_id).with_for_update()), "credential")
+        if row.revoked_at is not None:
+            raise HTTPException(409, "credential already revoked")
+        row.revoked_at = datetime.now(timezone.utc)
+        db.flush()
+        return {"id": row.id, "revoked_at": row.revoked_at}
+
+    @app.post("/projects", status_code=201)
+    def create_project(body: NameIn, db: Db, org: Tenant):
+        project = Project(organization_id=org, name=body.name)
+        db.add(project)
+        db.flush()
+        root = require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.kind == ScopeKind.ORGANIZATION.value)), "root scope")
+        scope = Scope(organization_id=org, project_id=project.id, parent_id=root.id, kind=ScopeKind.PROJECT.value, key=body.name)
+        db.add(scope)
+        db.flush()
+        return {"id": project.id, "scope_id": scope.id}
+
+    @app.post("/scopes", status_code=201)
+    def create_scope(body: ScopeIn, db: Db, org: Tenant):
+        if body.kind != ScopeKind.BRANCH:
+            raise HTTPException(422, "only branch scopes can be created here")
+        parent = require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == body.parent_id)), "parent scope")
+        if parent.kind != ScopeKind.PROJECT.value or parent.project_id != body.project_id:
+            raise HTTPException(422, "branch parent must be its project scope")
+        row = Scope(organization_id=org, project_id=body.project_id, parent_id=parent.id, kind=body.kind.value, key=body.key)
+        db.add(row)
+        db.flush()
+        return {"id": row.id, "kind": row.kind, "parent_id": row.parent_id}
+
+    @app.post("/agents", status_code=201)
+    def create_agent(body: NameIn, db: Db, org: Tenant):
+        row = Agent(organization_id=org, name=body.name)
+        db.add(row)
+        db.flush()
+        return {"id": row.id}
+
+    @app.post("/sessions", status_code=201)
+    def create_session(body: SessionIn, db: Db, org: Tenant):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == body.scope_id)), "scope")
+        if body.agent_id:
+            require(db.scalar(select(Agent).where(Agent.organization_id == org, Agent.id == body.agent_id)), "agent")
+        row = AgentSession(organization_id=org, scope_id=body.scope_id, agent_id=body.agent_id, external_ref=body.external_ref)
+        db.add(row)
+        db.flush()
+        return {"id": row.id}
+
+    @app.post("/events", status_code=201)
+    def create_event(body: EventIn, db: Db, org: Tenant, principal: Principal):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == body.scope_id)), "scope")
+        if body.session_id:
+            sess = require(db.scalar(select(AgentSession).where(AgentSession.organization_id == org, AgentSession.id == body.session_id)), "session")
+            if sess.scope_id != body.scope_id:
+                raise HTTPException(422, "event and session scope differ")
+        if len(json.dumps(body.payload).encode()) > 65536:
+            raise HTTPException(413, "event payload exceeds 64 KiB")
+        authority = SOURCE_AUTHORITY[CredentialRole(principal.role)].get(body.source_kind)
+        if authority is None:
+            raise HTTPException(403, "source kind is not allowed for this credential")
+        row = Event(organization_id=org, scope_id=body.scope_id, session_id=body.session_id, credential_id=principal.id, source_kind=body.source_kind.value, authority=authority.value, actor_ref=body.actor_ref, payload=body.payload)
+        db.add(row)
+        db.flush()
+        return {"id": row.id, "recorded_at": row.recorded_at, "authority": row.authority}
+
+    @app.get("/events/{event_id}")
+    def get_event(event_id: UUID, db: Db, org: Tenant):
+        row = require(db.scalar(select(Event).where(Event.organization_id == org, Event.id == event_id)), "event")
+        return {"id": row.id, "scope_id": row.scope_id, "source_kind": row.source_kind, "authority": row.authority, "credential_id": row.credential_id, "actor_ref": row.actor_ref, "payload": row.payload, "recorded_at": row.recorded_at}
+
+    @app.post("/claims", status_code=201)
+    def create_claim(body: ClaimIn, db: Db, org: Tenant, principal: Principal):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == body.scope_id)), "scope")
+        events = db.scalars(select(Event).where(Event.organization_id == org, Event.id.in_(body.evidence_event_ids))).all()
+        if len(events) != len(body.evidence_event_ids):
+            raise HTTPException(404, "evidence event not found")
+        if any(event.scope_id != body.scope_id for event in events):
+            raise HTTPException(422, "evidence must have the claim scope")
+        row = Claim(organization_id=org, scope_id=body.scope_id, subject=body.subject, predicate=body.predicate, value=body.value, status=ClaimStatus.CANDIDATE.value, valid_from=body.valid_from, valid_to=body.valid_to)
+        db.add(row)
+        db.flush()
+        for event in events:
+            db.add(Evidence(organization_id=org, claim_id=row.id, event_id=event.id))
+        db.add(MemoryAction(organization_id=org, claim_id=row.id, action=MemoryActionKind.CREATED.value, version=0, new_status=row.status, reason="manual claim submission", actor_ref=actor(principal), credential_id=principal.id))
+        db.flush()
+        peers = db.scalars(select(Claim).where(Claim.organization_id == org, Claim.scope_id == row.scope_id, Claim.subject == row.subject, Claim.predicate == row.predicate, Claim.id != row.id, Claim.status != ClaimStatus.DELETED.value)).all()
+        duplicate_ids = [p.id for p in peers if p.value == row.value and overlap(p, row)]
+        possible_conflict_ids = [p.id for p in peers if p.value != row.value and overlap(p, row)]
+        for peer_id in duplicate_ids:
+            db.add(MemoryAction(organization_id=org, claim_id=row.id, action=MemoryActionKind.DUPLICATE_DETECTED.value, reason=f"same proposition and overlapping validity as claim {peer_id}", actor_ref="system"))
+        for peer_id in possible_conflict_ids:
+            reason = "same subject and predicate, different value, overlapping validity; requires review"
+            db.add(ClaimRelationship(organization_id=org, from_claim_id=row.id, to_claim_id=peer_id, kind=RelationshipKind.RELATED_TO.value, reason=reason))
+            db.add(MemoryAction(organization_id=org, claim_id=row.id, action=MemoryActionKind.POSSIBLE_CONFLICT.value, reason=f"{reason}: {peer_id}", actor_ref="system"))
+        return {**claim_view(row), "duplicate_of": duplicate_ids, "possible_conflicts": possible_conflict_ids}
+
+    @app.post("/memories", status_code=201)
+    def record_memory(body: MemoryIn, db: Db, org: Tenant, principal: Principal):
+        """Atomically preserve a turn and its optional candidate proposition."""
+        event = create_event(EventIn(scope_id=body.scope_id, session_id=body.session_id, source_kind=body.source_kind, actor_ref=body.actor_ref, payload={"text": body.text}), db, org, principal)
+        claim = None
+        if body.proposition is not None:
+            proposal = body.proposition
+            claim = create_claim(ClaimIn(scope_id=body.scope_id, subject=proposal.subject, predicate=proposal.predicate, value=proposal.value, evidence_event_ids=[event["id"]], valid_from=proposal.valid_from, valid_to=proposal.valid_to), db, org, principal)
+        return {"event": event, "claim": claim, "scope_id": body.scope_id, "source_kind": body.source_kind}
+
+    @app.get("/claims/{claim_id}")
+    def get_claim(claim_id: UUID, db: Db, org: Tenant):
+        return claim_view(require(db.scalar(select(Claim).where(Claim.organization_id == org, Claim.id == claim_id)), "claim"))
+
+    @app.post("/claims/{claim_id}/status")
+    def change_status(claim_id: UUID, body: StatusIn, db: Db, org: Tenant, principal: Principal):
+        require_human(principal)
+        row = require(db.scalar(select(Claim).where(Claim.organization_id == org, Claim.id == claim_id).with_for_update()), "claim")
+        current = ClaimStatus(row.status)
+        if body.status not in ALLOWED_TRANSITIONS[current]:
+            raise HTTPException(409, "invalid status transition")
+        next_version = row.status_version + 1
+        action = MemoryAction(organization_id=org, claim_id=row.id, action=MemoryActionKind.STATUS_CHANGED.value, version=next_version, old_status=current.value, new_status=body.status.value, reason=body.reason, actor_ref=actor(principal), credential_id=principal.id)
+        db.add(action)
+        db.flush()
+        row.status = body.status.value
+        row.status_version = next_version
+        db.flush()
+        return claim_view(row)
+
+    @app.post("/relationships", status_code=201)
+    def create_relationship(body: RelationshipIn, db: Db, org: Tenant, principal: Principal):
+        require_human(principal)
+        if body.kind == RelationshipKind.RELATED_TO:
+            raise HTTPException(422, "related_to is reserved for system-detected possible conflicts")
+        if body.from_claim_id == body.to_claim_id:
+            raise HTTPException(422, "relationship requires distinct claims")
+        claims = db.scalars(select(Claim).where(Claim.organization_id == org, Claim.id.in_([body.from_claim_id, body.to_claim_id]))).all()
+        if len(claims) != 2:
+            raise HTTPException(404, "claim not found")
+        by_id = {c.id: c for c in claims}
+        if by_id[body.from_claim_id].scope_id != by_id[body.to_claim_id].scope_id:
+            raise HTTPException(422, "relationship requires one scope")
+        row = ClaimRelationship(organization_id=org, from_claim_id=body.from_claim_id, to_claim_id=body.to_claim_id, kind=body.kind.value, reason=body.reason)
+        db.add(row)
+        db.add(MemoryAction(organization_id=org, claim_id=body.from_claim_id, action=MemoryActionKind.RELATIONSHIP_CREATED.value, reason=f"{body.kind.value} {body.to_claim_id}: {body.reason}", actor_ref=actor(principal), credential_id=principal.id))
+        db.flush()
+        return {"id": row.id, "kind": row.kind}
+
+    @app.get("/conflicts")
+    def list_conflicts(scope_id: UUID, db: Db, org: Tenant):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        reviewed = select(ConflictReview.id).where(ConflictReview.organization_id == ClaimRelationship.organization_id, ConflictReview.case_relationship_id == ClaimRelationship.id).exists()
+        cases = db.scalars(select(ClaimRelationship).join(Claim, (ClaimRelationship.organization_id == Claim.organization_id) & (ClaimRelationship.from_claim_id == Claim.id)).where(ClaimRelationship.organization_id == org, ClaimRelationship.kind == RelationshipKind.RELATED_TO.value, Claim.scope_id == scope_id, ~reviewed).order_by(ClaimRelationship.created_at, ClaimRelationship.id).limit(100)).all()
+        if not cases:
+            return {"cases": []}
+        claim_ids = {claim_id for case in cases for claim_id in (case.from_claim_id, case.to_claim_id)}
+        claims = {claim.id: claim for claim in db.scalars(select(Claim).where(Claim.organization_id == org, Claim.id.in_(claim_ids))).all()}
+        return {"cases": [{"id": case.id, "from_claim_id": case.from_claim_id, "to_claim_id": case.to_claim_id, "from_claim": claim_view(claims[case.from_claim_id]), "to_claim": claim_view(claims[case.to_claim_id]), "reason": case.reason, "created_at": case.created_at} for case in cases]}
+
+    @app.post("/conflicts/{case_id}/review")
+    def review_conflict(case_id: UUID, body: ReviewIn, db: Db, org: Tenant, principal: Principal):
+        require_human(principal)
+        case = require(db.scalar(select(ClaimRelationship).where(ClaimRelationship.organization_id == org, ClaimRelationship.id == case_id, ClaimRelationship.kind == RelationshipKind.RELATED_TO.value).with_for_update()), "possible conflict")
+        if db.scalar(select(ConflictReview.id).where(ConflictReview.organization_id == org, ConflictReview.case_relationship_id == case.id)):
+            raise HTTPException(409, "possible conflict already reviewed")
+        if body.superseding_claim_id and body.superseding_claim_id not in (case.from_claim_id, case.to_claim_id):
+            raise HTTPException(422, "superseding claim must be one of the case claims")
+        review = ConflictReview(organization_id=org, case_relationship_id=case.id, reviewer_credential_id=principal.id, decision=body.decision.value, reason=body.reason, superseding_claim_id=body.superseding_claim_id)
+        db.add(review)
+        relation_kind = {ConflictDecision.CONTRADICTION: RelationshipKind.CONTRADICTS, ConflictDecision.TEMPORAL_CHANGE: RelationshipKind.SUPERSEDES}.get(body.decision)
+        if relation_kind:
+            from_id = body.superseding_claim_id or case.from_claim_id
+            to_id = case.to_claim_id if from_id == case.from_claim_id else case.from_claim_id
+            existing = db.scalar(select(ClaimRelationship).where(ClaimRelationship.organization_id == org, ClaimRelationship.from_claim_id == from_id, ClaimRelationship.to_claim_id == to_id, ClaimRelationship.kind == relation_kind.value))
+            if not existing:
+                db.add(ClaimRelationship(organization_id=org, from_claim_id=from_id, to_claim_id=to_id, kind=relation_kind.value, reason=body.reason))
+                db.add(MemoryAction(organization_id=org, claim_id=from_id, action=MemoryActionKind.RELATIONSHIP_CREATED.value, reason=f"reviewed {relation_kind.value} {to_id}: {body.reason}", actor_ref=actor(principal), credential_id=principal.id))
+        db.flush()
+        return {"id": review.id, "case_relationship_id": case.id, "decision": review.decision, "superseding_claim_id": review.superseding_claim_id, "reviewer_credential_id": principal.id}
+
+    @app.get("/claims")
+    def retrieve_claims(scope_id: UUID, db: Db, org: Tenant, principal: Principal, predicate: str | None = None, limit: int = Query(default=50, ge=1, le=100)):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        query = select(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status.in_([ClaimStatus.ACTIVE.value, ClaimStatus.VERIFIED.value, ClaimStatus.CONFLICTED.value]))
+        if predicate:
+            query = query.where(Claim.predicate == predicate)
+        rows = db.scalars(query.order_by(Claim.recorded_at.desc(), Claim.id).limit(limit)).all()
+        retrieval = RetrievalEvent(organization_id=org, scope_id=scope_id, predicate=predicate, actor_ref=actor(principal))
+        db.add(retrieval)
+        db.flush()
+        for row in rows:
+            db.add(RetrievalItem(organization_id=org, retrieval_id=retrieval.id, claim_id=row.id))
+        sources: dict[UUID, list[dict]] = {row.id: [] for row in rows}
+        if rows:
+            evidence_rows = db.execute(select(Evidence, Event).join(Event, (Evidence.organization_id == Event.organization_id) & (Evidence.event_id == Event.id)).where(Evidence.organization_id == org, Evidence.claim_id.in_([row.id for row in rows]))).all()
+            for evidence, event in evidence_rows:
+                sources[evidence.claim_id].append({"event_id": event.id, "source_kind": event.source_kind, "authority": event.authority})
+        return {"retrieval_id": retrieval.id, "claims": [{**claim_view(row), "sources": sources[row.id]} for row in rows]}
+
+    @app.get("/claims/{claim_id}/explain")
+    def explain(claim_id: UUID, db: Db, org: Tenant):
+        row = require(db.scalar(select(Claim).where(Claim.organization_id == org, Claim.id == claim_id)), "claim")
+        evidence_rows = db.execute(select(Evidence, Event).join(Event, (Evidence.organization_id == Event.organization_id) & (Evidence.event_id == Event.id)).where(Evidence.organization_id == org, Evidence.claim_id == claim_id)).all()
+        credential_ids = {event.credential_id for _, event in evidence_rows if event.credential_id is not None}
+        credentials = {credential.id: credential for credential in db.scalars(select(Credential).where(Credential.organization_id == org, Credential.id.in_(credential_ids))).all()} if credential_ids else {}
+        relations = db.scalars(select(ClaimRelationship).where(ClaimRelationship.organization_id == org, (ClaimRelationship.from_claim_id == claim_id) | (ClaimRelationship.to_claim_id == claim_id))).all()
+        actions = db.scalars(select(MemoryAction).where(MemoryAction.organization_id == org, MemoryAction.claim_id == claim_id).order_by(MemoryAction.created_at, MemoryAction.id)).all()
+        retrievals = db.scalars(select(RetrievalEvent).join(RetrievalItem, (RetrievalItem.organization_id == RetrievalEvent.organization_id) & (RetrievalItem.retrieval_id == RetrievalEvent.id)).where(RetrievalItem.organization_id == org, RetrievalItem.claim_id == claim_id).order_by(RetrievalEvent.created_at)).all()
+        reviews = db.scalars(select(ConflictReview).join(ClaimRelationship, (ConflictReview.organization_id == ClaimRelationship.organization_id) & (ConflictReview.case_relationship_id == ClaimRelationship.id)).where(ConflictReview.organization_id == org, (ClaimRelationship.from_claim_id == claim_id) | (ClaimRelationship.to_claim_id == claim_id))).all()
+        evidence_view = []
+        for evidence, event in evidence_rows:
+            credential = credentials.get(event.credential_id)
+            evidence_view.append({
+                "id": evidence.id,
+                "event": {
+                    "id": event.id,
+                    "source_kind": event.source_kind,
+                    "authority": event.authority,
+                    "credential_id": event.credential_id,
+                    "credential": {
+                        "role": credential.role,
+                        "label": credential.label,
+                        "revoked_at": credential.revoked_at,
+                    } if credential else None,
+                    "actor_ref": event.actor_ref,
+                    "payload": event.payload,
+                    "recorded_at": event.recorded_at,
+                },
+            })
+        return {
+            "claim": claim_view(row),
+            "evidence": evidence_view,
+            "relationships": [{"id": relation.id, "kind": relation.kind, "from_claim_id": relation.from_claim_id, "to_claim_id": relation.to_claim_id, "reason": relation.reason} for relation in relations],
+            "conflict_reviews": [{"case_relationship_id": review.case_relationship_id, "decision": review.decision, "superseding_claim_id": review.superseding_claim_id, "reason": review.reason, "reviewer_credential_id": review.reviewer_credential_id, "created_at": review.created_at} for review in reviews],
+            "actions": [{"action": action.action, "old_status": action.old_status, "new_status": action.new_status, "reason": action.reason, "actor_ref": action.actor_ref, "credential_id": action.credential_id, "created_at": action.created_at} for action in actions],
+            "retrievals": [{"id": retrieval.id, "created_at": retrieval.created_at} for retrieval in retrievals],
+            "action_influence": "not_tracked",
+        }
+
+    return app
+
+
+app = create_app()
