@@ -78,6 +78,12 @@ class MemoryActionKind(StrEnum):
     POSSIBLE_CONFLICT = "possible_conflict"
     DUPLICATE_DETECTED = "duplicate_detected"
     RELATIONSHIP_CREATED = "relationship_created"
+    EXTRACTED = "extracted"
+
+
+class ExtractionStatus(StrEnum):
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 ALLOWED_TRANSITIONS = {

@@ -14,6 +14,9 @@ dependencies = [
   "sqlalchemy>=2.0,<3",
   "psycopg[binary]>=3.2,<4",
   "alembic>=1.13,<2",
+  "httpx>=0.27,<1",
+  "openai>=2,<3",
+  "pgvector>=0.3,<1",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +25,10 @@ mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]
 
 [project.scripts]
 provena-mcp = "provena.mcp_server:main"
+provena-codex-capture = "provena.agent_capture_hook:main"
+provena-codex-retrieve = "provena.agent_context_hook:main"
+provena-agent-capture = "provena.agent_capture_hook:main"
+provena-agent-context = "provena.agent_context_hook:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

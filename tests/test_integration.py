@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from provena.api import Settings, create_app
+from provena.intelligence import ExtractedFact
 
 
 @pytest.fixture(scope="module")
@@ -97,7 +98,8 @@ def test_tenant_and_branch_isolation(client):
     branch = client.post("/scopes", headers=first, json={"kind": "branch", "project_id": first_project["id"], "parent_id": first_project["scope_id"], "key": "feature/x"}).json()["id"]
     branch_claim = claim(client, first, branch, event(client, first, branch))
     client.post(f"/claims/{branch_claim['id']}/status", headers=human, json={"status": "active", "reason": "reviewed"})
-    assert client.get("/claims", headers=first, params={"scope_id": first_project["scope_id"]}).json()["claims"] == []
+    project_claims = client.get("/claims", headers=first, params={"scope_id": first_project["scope_id"]}).json()["claims"]
+    assert [item["id"] for item in project_claims] == [old["id"]]
     assert client.get("/claims", headers=first, params={"scope_id": branch}).json()["claims"][0]["id"] == branch_claim["id"]
     assert second_project["scope_id"] != first_project["scope_id"]
 
@@ -231,7 +233,7 @@ def test_mcp_agent_flow(client):
         async with mcp.Client(build_server(rest)) as agent:
             listed = await agent.list_tools()
             names = {tool.name for tool in listed.tools}
-            assert names == {"memory_search", "memory_record_event", "memory_remember", "memory_propose_claim", "memory_explain"}
+            assert names == {"memory_context", "memory_search", "memory_capture_turn", "memory_record_event", "memory_remember", "memory_propose_claim", "memory_explain"}
             assert "memory_activate" not in names
             event_result = await agent.call_tool("memory_record_event", {"text": "Assistant noticed a PostgreSQL deployment config"})
             assert not event_result.is_error
@@ -241,7 +243,8 @@ def test_mcp_agent_flow(client):
             claim_id = proposal.structured_content["id"]
             assert proposal.structured_content["status"] == "candidate"
             before = await agent.call_tool("memory_search", {"predicate": "production_database"})
-            assert before.structured_content["claims"] == []
+            assert before.structured_content["claims"][0]["id"] == claim_id
+            assert before.structured_content["claims"][0]["status"] == "candidate"
             assert client.post(f"/claims/{claim_id}/status", headers=human_headers, json={"status": "active", "reason": "reviewed source"}).status_code == 200
             found = await agent.call_tool("memory_search", {"predicate": "production_database"})
             assert found.structured_content["claims"][0]["id"] == claim_id
@@ -285,7 +288,9 @@ def test_atomic_memory_write_and_candidate_review_boundary(client, url):
     explained = client.get(f"/claims/{result['claim']['id']}/explain", headers=agent).json()
     assert explained["evidence"][0]["event"]["id"] == result["event"]["id"]
     assert explained["evidence"][0]["event"]["payload"]["text"] == body["text"]
-    assert client.get("/claims", headers=agent, params={"scope_id": scope}).json()["claims"] == []
+    provisional = client.get("/claims", headers=agent, params={"scope_id": scope}).json()["claims"]
+    assert provisional[0]["id"] == result["claim"]["id"]
+    assert provisional[0]["status"] == "candidate"
 
     captured = client.post("/memories", headers=agent, json={"scope_id": scope, "source_kind": "assistant_inference", "text": "Potential migration discussed."})
     assert captured.status_code == 201
@@ -327,3 +332,70 @@ def test_opt_in_conversation_capture(client):
     assert client.get(f"/events/{assistant_turn['event']['id']}", headers=agent).json()["source_kind"] == "assistant_inference"
     with pytest.raises(ValueError, match="role must be"):
         capture.record_turn("tool", "forged output")
+
+    portable = ConversationCapture("http://testserver", agent["X-API-Key"], scope, enabled=True, session_external_ref="claude:session-42", http=client)
+    first = portable.record_turn("user", "Remember this across agents.")
+    second = portable.record_turn("assistant", "I will use the shared scope.")
+    assert first["session_id"] == second["session_id"]
+
+
+def test_automatic_extraction_and_semantic_candidate_retrieval(url):
+    class FakeIntelligence:
+        extraction_model = "test-extractor-v1"
+        embedding_model = "test-embedding-v1"
+        fail = False
+
+        def extract(self, source, source_kind):
+            if self.fail:
+                raise RuntimeError("temporary extractor failure")
+            if "cheese" in source.lower():
+                return [ExtractedFact(subject="user", predicate="dietary_allergy", value={"food": "cheese"}, confidence=0.98)]
+            return []
+
+        def embed(self, texts):
+            return [[1.0, 0.0] + [0.0] * 1534 if "cheese" in text.lower() else [0.0, 1.0] + [0.0] * 1534 for text in texts]
+
+    settings = Settings(database_url=url, bootstrap_token="test-bootstrap-secret")
+    fake = FakeIntelligence()
+    with TestClient(create_app(settings, intelligence=fake)) as semantic_client:
+        organization, agent = tenant(semantic_client)
+        scope = project(semantic_client, agent)["scope_id"]
+        source = semantic_client.post("/memories", headers=agent, json={"scope_id": scope, "source_kind": "user_statement", "text": "I am allergic to cheese."}).json()["event"]
+        extracted = semantic_client.post(f"/events/{source['id']}/extract", headers=agent)
+        assert extracted.status_code == 201, extracted.text
+        result = extracted.json()
+        assert result["status"] == "completed", result
+        assert result["claims"][0]["status"] == "candidate"
+        claim_id = result["claims"][0]["id"]
+        repeated = semantic_client.post(f"/events/{source['id']}/extract", headers=agent).json()
+        assert repeated["reused"] is True
+        assert claim_id in repeated["claim_ids"]
+
+        found = semantic_client.get("/claims", headers=agent, params={"scope_id": scope, "q": "Which pizza is safe without cheese?"})
+        assert found.status_code == 200, found.text
+        payload = found.json()
+        assert payload["claims"][0]["id"] == claim_id
+        assert payload["claims"][0]["status"] == "candidate"
+        assert payload["claims"][0]["sources"][0]["source_kind"] == "user_statement"
+        explanation = semantic_client.get(f"/claims/{claim_id}/explain", headers=agent).json()
+        assert explanation["evidence"][0]["event"]["payload"]["text"] == "I am allergic to cheese."
+        assert any(action["action"] == "extracted" for action in explanation["actions"])
+        assert explanation["extractions"][0]["extractor_model"] == "test-extractor-v1"
+
+        _, other_agent = tenant(semantic_client)
+        other_scope = project(semantic_client, other_agent)["scope_id"]
+        assert semantic_client.get("/claims", headers=other_agent, params={"scope_id": other_scope, "q": "cheese allergy"}).json()["claims"] == []
+
+        retry_event = semantic_client.post("/memories", headers=agent, json={"scope_id": scope, "source_kind": "user_statement", "text": "Cheese causes an allergic reaction."}).json()["event"]
+        fake.fail = True
+        failed = semantic_client.post(f"/events/{retry_event['id']}/extract", headers=agent).json()
+        assert failed["status"] == "failed"
+        fake.fail = False
+        retried = semantic_client.post(f"/events/{retry_event['id']}/extract", headers=agent).json()
+        assert retried["status"] == "completed"
+        assert retried["reused"] is False
+
+    engine = create_engine(url)
+    with pytest.raises(DBAPIError), engine.begin() as connection:
+        connection.execute(text("UPDATE extraction_run SET status='failed' WHERE id=:id"), {"id": result["id"]})
+    engine.dispose()
