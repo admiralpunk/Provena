@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, PrimaryKeyConstraint, UniqueConstraint, func, text
+from sqlalchemy import CheckConstraint, Computed, ForeignKeyConstraint, Index, PrimaryKeyConstraint, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import DateTime, Integer, String, Text
+from pgvector.sqlalchemy import Vector
 
 from .domain import ClaimStatus
 
@@ -93,7 +94,7 @@ class Session(Base):
     scope_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     external_ref: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = created()
-    __table_args__ = (PrimaryKeyConstraint("id"), UniqueConstraint("organization_id", "id"), ForeignKeyConstraint(["organization_id", "scope_id"], ["scope.organization_id", "scope.id"]), ForeignKeyConstraint(["organization_id", "agent_id"], ["agent.organization_id", "agent.id"]),)
+    __table_args__ = (PrimaryKeyConstraint("id"), UniqueConstraint("organization_id", "id"), UniqueConstraint("organization_id", "scope_id", "external_ref", name="uq_session_external_ref"), ForeignKeyConstraint(["organization_id", "scope_id"], ["scope.organization_id", "scope.id"]), ForeignKeyConstraint(["organization_id", "agent_id"], ["agent.organization_id", "agent.id"]),)
 
 
 class Event(Base):
@@ -135,6 +136,44 @@ class Evidence(Base):
     event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = created()
     __table_args__ = (PrimaryKeyConstraint("id"), UniqueConstraint("organization_id", "claim_id", "event_id"), ForeignKeyConstraint(["organization_id", "claim_id"], ["claim.organization_id", "claim.id"]), ForeignKeyConstraint(["organization_id", "event_id"], ["event.organization_id", "event.id"]),)
+
+
+class ExtractionRun(Base):
+    __tablename__ = "extraction_run"
+    id: Mapped[UUID] = uid()
+    organization_id: Mapped[UUID] = org_id()
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    extractor_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    facts: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created()
+    __table_args__ = (
+        PrimaryKeyConstraint("id"),
+        UniqueConstraint("organization_id", "id"),
+        ForeignKeyConstraint(["organization_id", "event_id"], ["event.organization_id", "event.id"]),
+        CheckConstraint("status IN ('completed','failed')", name="extraction_status"),
+        Index("ix_extraction_event_models", "organization_id", "event_id", "extractor_model", "embedding_model"),
+    )
+
+
+class ClaimEmbedding(Base):
+    __tablename__ = "claim_embedding"
+    id: Mapped[UUID] = uid()
+    organization_id: Mapped[UUID] = org_id()
+    claim_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    dimensions: Mapped[int] = mapped_column(Integer, Computed("vector_dims(embedding)", persisted=True), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(), nullable=False)
+    created_at: Mapped[datetime] = created()
+    __table_args__ = (
+        PrimaryKeyConstraint("id"),
+        UniqueConstraint("organization_id", "id"),
+        UniqueConstraint("organization_id", "claim_id", "model"),
+        ForeignKeyConstraint(["organization_id", "claim_id"], ["claim.organization_id", "claim.id"]),
+        CheckConstraint("dimensions > 0", name="embedding_dimensions"),
+    )
 
 
 class ClaimRelationship(Base):
@@ -184,6 +223,8 @@ class RetrievalEvent(Base):
     organization_id: Mapped[UUID] = org_id()
     scope_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     predicate: Mapped[str | None] = mapped_column(String(200))
+    query_text: Mapped[str | None] = mapped_column(Text)
+    method: Mapped[str] = mapped_column(String(32), nullable=False, default="exact")
     actor_ref: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = created()
     __table_args__ = (PrimaryKeyConstraint("id"), UniqueConstraint("organization_id", "id"), ForeignKeyConstraint(["organization_id", "scope_id"], ["scope.organization_id", "scope.id"]),)

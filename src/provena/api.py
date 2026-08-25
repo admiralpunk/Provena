@@ -9,15 +9,22 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import create_engine, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from .domain import ALLOWED_TRANSITIONS, SOURCE_AUTHORITY, ClaimStatus, ConflictDecision, CredentialRole, MemoryActionKind, RelationshipKind, ScopeKind, SourceKind
-from .models import Agent, Claim, ClaimRelationship, ConflictReview, Credential, Event, Evidence, MemoryAction, Organization, Project, RetrievalEvent, RetrievalItem, Scope, Session as AgentSession
+from .domain import ALLOWED_TRANSITIONS, SOURCE_AUTHORITY, ClaimStatus, ConflictDecision, CredentialRole, ExtractionStatus, MemoryActionKind, RelationshipKind, ScopeKind, SourceKind
+from .intelligence import MemoryIntelligence, OllamaMemoryIntelligence, OpenAIMemoryIntelligence, claim_text
+from .models import Agent, Claim, ClaimEmbedding, ClaimRelationship, ConflictReview, Credential, Event, Evidence, ExtractionRun, MemoryAction, Organization, Project, RetrievalEvent, RetrievalItem, Scope, Session as AgentSession
 
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://provena:provena_dev@localhost:5437/provena"
     bootstrap_token: str = ""
+    memory_provider: str = "ollama"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    openai_api_key: str = ""
+    extraction_model: str = "qwen2.5:1.5b"
+    embedding_model: str = "nomic-embed-text"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
@@ -108,6 +115,7 @@ class PropositionIn(BaseModel):
 class MemoryIn(BaseModel):
     scope_id: UUID
     session_id: UUID | None = None
+    session_external_ref: str | None = Field(default=None, min_length=1, max_length=200)
     source_kind: SourceKind
     actor_ref: str | None = Field(default=None, max_length=200)
     text: str = Field(min_length=1)
@@ -117,6 +125,8 @@ class MemoryIn(BaseModel):
     def check_text(self):
         if not self.text.strip():
             raise ValueError("memory text is required")
+        if self.session_id is not None and self.session_external_ref is not None:
+            raise ValueError("use session_id or session_external_ref, not both")
         return self
 
 
@@ -155,8 +165,15 @@ def require_human(principal: Credential) -> None:
         raise HTTPException(403, "human review credential required")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, intelligence: MemoryIntelligence | None = None) -> FastAPI:
     settings = settings or Settings()
+    if intelligence is None:
+        if settings.memory_provider == "ollama":
+            intelligence = OllamaMemoryIntelligence(settings.ollama_base_url, settings.extraction_model, settings.embedding_model)
+        elif settings.memory_provider == "openai" and settings.openai_api_key:
+            intelligence = OpenAIMemoryIntelligence(settings.openai_api_key, settings.extraction_model, settings.embedding_model)
+        elif settings.memory_provider not in {"ollama", "openai", "none"}:
+            raise ValueError("MEMORY_PROVIDER must be ollama, openai, or none")
     engine = create_engine(settings.database_url, pool_pre_ping=True)
     factory = sessionmaker(engine, expire_on_commit=False)
     app = FastAPI(title="Provena", version="0.1.0")
@@ -331,12 +348,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/memories", status_code=201)
     def record_memory(body: MemoryIn, db: Db, org: Tenant, principal: Principal):
         """Atomically preserve a turn and its optional candidate proposition."""
-        event = create_event(EventIn(scope_id=body.scope_id, session_id=body.session_id, source_kind=body.source_kind, actor_ref=body.actor_ref, payload={"text": body.text}), db, org, principal)
+        session_id = body.session_id
+        if body.session_external_ref is not None:
+            session_id = db.scalar(
+                insert(AgentSession)
+                .values(organization_id=org, scope_id=body.scope_id, external_ref=body.session_external_ref)
+                .on_conflict_do_nothing(constraint="uq_session_external_ref")
+                .returning(AgentSession.id)
+            )
+            if session_id is None:
+                session_id = db.scalar(select(AgentSession.id).where(AgentSession.organization_id == org, AgentSession.scope_id == body.scope_id, AgentSession.external_ref == body.session_external_ref))
+        event = create_event(EventIn(scope_id=body.scope_id, session_id=session_id, source_kind=body.source_kind, actor_ref=body.actor_ref, payload={"text": body.text}), db, org, principal)
         claim = None
         if body.proposition is not None:
             proposal = body.proposition
             claim = create_claim(ClaimIn(scope_id=body.scope_id, subject=proposal.subject, predicate=proposal.predicate, value=proposal.value, evidence_event_ids=[event["id"]], valid_from=proposal.valid_from, valid_to=proposal.valid_to), db, org, principal)
-        return {"event": event, "claim": claim, "scope_id": body.scope_id, "source_kind": body.source_kind}
+        return {"event": event, "claim": claim, "scope_id": body.scope_id, "session_id": session_id, "source_kind": body.source_kind}
+
+    @app.post("/events/{event_id}/extract", status_code=201)
+    def extract_event(event_id: UUID, db: Db, org: Tenant, principal: Principal):
+        event = require(db.scalar(select(Event).where(Event.organization_id == org, Event.id == event_id).with_for_update()), "event")
+        if intelligence is None:
+            return {"status": "failed", "error": "memory intelligence is not configured", "claims": []}
+        existing = db.scalar(select(ExtractionRun).where(ExtractionRun.organization_id == org, ExtractionRun.event_id == event.id, ExtractionRun.extractor_model == intelligence.extraction_model, ExtractionRun.embedding_model == intelligence.embedding_model, ExtractionRun.status == ExtractionStatus.COMPLETED.value).order_by(ExtractionRun.created_at.desc()))
+        if existing:
+            claim_ids = db.scalars(select(Evidence.claim_id).where(Evidence.organization_id == org, Evidence.event_id == event.id)).all()
+            return {"id": existing.id, "status": existing.status, "facts": existing.facts, "claim_ids": claim_ids, "reused": True}
+        try:
+            facts = intelligence.extract(event.payload.get("text", ""), event.source_kind)
+            embeddings = intelligence.embed([claim_text(f.subject, f.predicate, f.value) for f in facts])
+            claims = []
+            fact_views = []
+            with db.begin_nested():
+                for fact, embedding in zip(facts, embeddings, strict=True):
+                    created = create_claim(ClaimIn(scope_id=event.scope_id, subject=fact.subject, predicate=fact.predicate, value=fact.value, evidence_event_ids=[event.id]), db, org, principal)
+                    db.add(ClaimEmbedding(organization_id=org, claim_id=created["id"], model=intelligence.embedding_model, embedding=embedding))
+                    db.add(MemoryAction(organization_id=org, claim_id=created["id"], action=MemoryActionKind.EXTRACTED.value, reason=f"extracted by {intelligence.extraction_model} with confidence {fact.confidence}", actor_ref="system:extractor"))
+                    claims.append(created)
+                    fact_views.append({**fact.model_dump(), "claim_id": str(created["id"])})
+                run = ExtractionRun(organization_id=org, event_id=event.id, extractor_model=intelligence.extraction_model, embedding_model=intelligence.embedding_model, status=ExtractionStatus.COMPLETED.value, facts=fact_views)
+                db.add(run)
+                db.flush()
+            return {"id": run.id, "status": run.status, "facts": fact_views, "claims": claims, "reused": False}
+        except Exception as exc:
+            run = ExtractionRun(organization_id=org, event_id=event.id, extractor_model=intelligence.extraction_model, embedding_model=intelligence.embedding_model, status=ExtractionStatus.FAILED.value, facts=[], error=str(exc)[:2000])
+            db.add(run)
+            db.flush()
+            return {"id": run.id, "status": run.status, "error": run.error, "claims": [], "reused": False}
 
     @app.get("/claims/{claim_id}")
     def get_claim(claim_id: UUID, db: Db, org: Tenant):
@@ -410,13 +468,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"id": review.id, "case_relationship_id": case.id, "decision": review.decision, "superseding_claim_id": review.superseding_claim_id, "reviewer_credential_id": principal.id}
 
     @app.get("/claims")
-    def retrieve_claims(scope_id: UUID, db: Db, org: Tenant, principal: Principal, predicate: str | None = None, limit: int = Query(default=50, ge=1, le=100)):
+    def retrieve_claims(scope_id: UUID, db: Db, org: Tenant, principal: Principal, predicate: str | None = None, q: str | None = Query(default=None, min_length=1, max_length=2000), limit: int = Query(default=50, ge=1, le=100)):
         require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
-        query = select(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status.in_([ClaimStatus.ACTIVE.value, ClaimStatus.VERIFIED.value, ClaimStatus.CONFLICTED.value]))
+        eligible = [ClaimStatus.CANDIDATE.value, ClaimStatus.ACTIVE.value, ClaimStatus.VERIFIED.value, ClaimStatus.CONFLICTED.value]
+        query = select(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status.in_(eligible))
         if predicate:
             query = query.where(Claim.predicate == predicate)
-        rows = db.scalars(query.order_by(Claim.recorded_at.desc(), Claim.id).limit(limit)).all()
-        retrieval = RetrievalEvent(organization_id=org, scope_id=scope_id, predicate=predicate, actor_ref=actor(principal))
+        method = "exact"
+        if q:
+            if intelligence is None:
+                raise HTTPException(503, "semantic retrieval is not configured")
+            vector = intelligence.embed([q])[0]
+            query = query.join(ClaimEmbedding, (ClaimEmbedding.organization_id == Claim.organization_id) & (ClaimEmbedding.claim_id == Claim.id)).where(ClaimEmbedding.model == intelligence.embedding_model, ClaimEmbedding.dimensions == len(vector)).order_by(ClaimEmbedding.embedding.cosine_distance(vector), Claim.recorded_at.desc())
+            method = "semantic"
+        else:
+            query = query.order_by(Claim.recorded_at.desc(), Claim.id)
+        rows = db.scalars(query.limit(limit)).all()
+        retrieval = RetrievalEvent(organization_id=org, scope_id=scope_id, predicate=predicate, query_text=q, method=method, actor_ref=actor(principal))
         db.add(retrieval)
         db.flush()
         for row in rows:
@@ -438,6 +506,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         actions = db.scalars(select(MemoryAction).where(MemoryAction.organization_id == org, MemoryAction.claim_id == claim_id).order_by(MemoryAction.created_at, MemoryAction.id)).all()
         retrievals = db.scalars(select(RetrievalEvent).join(RetrievalItem, (RetrievalItem.organization_id == RetrievalEvent.organization_id) & (RetrievalItem.retrieval_id == RetrievalEvent.id)).where(RetrievalItem.organization_id == org, RetrievalItem.claim_id == claim_id).order_by(RetrievalEvent.created_at)).all()
         reviews = db.scalars(select(ConflictReview).join(ClaimRelationship, (ConflictReview.organization_id == ClaimRelationship.organization_id) & (ConflictReview.case_relationship_id == ClaimRelationship.id)).where(ConflictReview.organization_id == org, (ClaimRelationship.from_claim_id == claim_id) | (ClaimRelationship.to_claim_id == claim_id))).all()
+        evidence_event_ids = [event.id for _, event in evidence_rows]
+        extraction_runs = db.scalars(select(ExtractionRun).where(ExtractionRun.organization_id == org, ExtractionRun.event_id.in_(evidence_event_ids)).order_by(ExtractionRun.created_at, ExtractionRun.id)).all() if evidence_event_ids else []
         evidence_view = []
         for evidence, event in evidence_rows:
             credential = credentials.get(event.credential_id)
@@ -464,6 +534,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "relationships": [{"id": relation.id, "kind": relation.kind, "from_claim_id": relation.from_claim_id, "to_claim_id": relation.to_claim_id, "reason": relation.reason} for relation in relations],
             "conflict_reviews": [{"case_relationship_id": review.case_relationship_id, "decision": review.decision, "superseding_claim_id": review.superseding_claim_id, "reason": review.reason, "reviewer_credential_id": review.reviewer_credential_id, "created_at": review.created_at} for review in reviews],
             "actions": [{"action": action.action, "old_status": action.old_status, "new_status": action.new_status, "reason": action.reason, "actor_ref": action.actor_ref, "credential_id": action.credential_id, "created_at": action.created_at} for action in actions],
+            "extractions": [{"id": run.id, "event_id": run.event_id, "extractor_model": run.extractor_model, "embedding_model": run.embedding_model, "status": run.status, "facts": run.facts, "error": run.error, "created_at": run.created_at} for run in extraction_runs],
             "retrievals": [{"id": retrieval.id, "created_at": retrieval.created_at} for retrieval in retrievals],
             "action_influence": "not_tracked",
         }
