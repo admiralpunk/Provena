@@ -1,8 +1,5 @@
-# Local instructions and planning
-/AGENTS.md
-/README.md
-/planning/
-/docs/
+# Local agent state
+.agents/
 
 # Python environments and build output
 .venv/
@@ -12,6 +9,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+*.tsbuildinfo
 
 # Test and analysis output
 .pytest_cache/
@@ -33,8 +34,9 @@ htmlcov/
 .DS_Store
 *.swp
 *.swo
-*.ini
-__init__.*
 
 # Runtime output
 *.log
+
+# Local design exports; approved product assets belong in frontend/public/
+/provena figma/
