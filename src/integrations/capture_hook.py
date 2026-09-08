@@ -3,7 +3,7 @@
 import os
 import sys
 
-from .agent_hooks import capture_run
+from .hooks import capture_run
 
 
 def main() -> None:

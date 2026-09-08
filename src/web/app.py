@@ -2,167 +2,66 @@ import hashlib
 import json
 import secrets
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from pydantic import BaseModel, Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy import create_engine, select
+from sqlalchemy import String, cast, create_engine, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from .domain import ALLOWED_TRANSITIONS, SOURCE_AUTHORITY, ClaimStatus, ConflictDecision, CredentialRole, ExtractionStatus, MemoryActionKind, RelationshipKind, ScopeKind, SourceKind
-from .intelligence import MemoryIntelligence, OllamaMemoryIntelligence, OpenAIMemoryIntelligence, claim_text
-from .models import Agent, Claim, ClaimEmbedding, ClaimRelationship, ConflictReview, Credential, Event, Evidence, ExtractionRun, MemoryAction, Organization, Project, RetrievalEvent, RetrievalItem, Scope, Session as AgentSession
-
-
-class Settings(BaseSettings):
-    database_url: str = "postgresql+psycopg://provena:provena_dev@localhost:5437/provena"
-    bootstrap_token: str = ""
-    memory_provider: str = "ollama"
-    ollama_base_url: str = "http://127.0.0.1:11434"
-    openai_api_key: str = ""
-    extraction_model: str = "qwen2.5:1.5b"
-    embedding_model: str = "nomic-embed-text"
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-
-class OrganizationIn(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-
-
-class CredentialIn(BaseModel):
-    role: CredentialRole
-    label: str = Field(min_length=1, max_length=200)
-
-
-class ReviewIn(BaseModel):
-    decision: ConflictDecision
-    reason: str = Field(min_length=1, max_length=2000)
-    superseding_claim_id: UUID | None = None
-
-    @model_validator(mode="after")
-    def check_direction(self):
-        if (self.decision == ConflictDecision.TEMPORAL_CHANGE) != (self.superseding_claim_id is not None):
-            raise ValueError("temporal_change requires superseding_claim_id; other decisions must omit it")
-        return self
-
-
-class NameIn(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-
-
-class ScopeIn(BaseModel):
-    kind: ScopeKind
-    project_id: UUID
-    parent_id: UUID
-    key: str = Field(min_length=1, max_length=200)
-
-
-class SessionIn(BaseModel):
-    scope_id: UUID
-    agent_id: UUID | None = None
-    external_ref: str | None = Field(default=None, max_length=200)
-
-
-class EventIn(BaseModel):
-    scope_id: UUID
-    session_id: UUID | None = None
-    source_kind: SourceKind
-    actor_ref: str | None = Field(default=None, max_length=200)
-    payload: dict[str, Any]
-
-
-class ClaimIn(BaseModel):
-    scope_id: UUID
-    subject: str = Field(min_length=1, max_length=300)
-    predicate: str = Field(min_length=1, max_length=200)
-    value: dict[str, Any]
-    evidence_event_ids: list[UUID] = Field(min_length=1)
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
-
-    @model_validator(mode="after")
-    def check_times(self):
-        for value in (self.valid_from, self.valid_to):
-            if value is not None and value.tzinfo is None:
-                raise ValueError("validity timestamps require an offset")
-        if self.valid_from and self.valid_to and self.valid_from >= self.valid_to:
-            raise ValueError("valid_from must precede valid_to")
-        if len(set(self.evidence_event_ids)) != len(self.evidence_event_ids):
-            raise ValueError("duplicate evidence event")
-        return self
-
-
-class PropositionIn(BaseModel):
-    subject: str = Field(min_length=1, max_length=300)
-    predicate: str = Field(min_length=1, max_length=200)
-    value: dict[str, Any]
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
-
-    @model_validator(mode="after")
-    def check_times(self):
-        for value in (self.valid_from, self.valid_to):
-            if value is not None and value.tzinfo is None:
-                raise ValueError("validity timestamps require an offset")
-        if self.valid_from and self.valid_to and self.valid_from >= self.valid_to:
-            raise ValueError("valid_from must precede valid_to")
-        return self
-
-
-class MemoryIn(BaseModel):
-    scope_id: UUID
-    session_id: UUID | None = None
-    session_external_ref: str | None = Field(default=None, min_length=1, max_length=200)
-    source_kind: SourceKind
-    actor_ref: str | None = Field(default=None, max_length=200)
-    text: str = Field(min_length=1)
-    proposition: PropositionIn | None = None
-
-    @model_validator(mode="after")
-    def check_text(self):
-        if not self.text.strip():
-            raise ValueError("memory text is required")
-        if self.session_id is not None and self.session_external_ref is not None:
-            raise ValueError("use session_id or session_external_ref, not both")
-        return self
-
-
-class StatusIn(BaseModel):
-    status: ClaimStatus
-    reason: str = Field(min_length=1, max_length=2000)
-
-
-class RelationshipIn(BaseModel):
-    from_claim_id: UUID
-    to_claim_id: UUID
-    kind: RelationshipKind
-    reason: str = Field(min_length=1, max_length=2000)
-
-
-def require(row, what: str):
-    if row is None:
-        raise HTTPException(404, f"{what} not found")
-    return row
-
-
-def overlap(a: Claim, b: Claim) -> bool:
-    return (a.valid_to is None or b.valid_from is None or a.valid_to > b.valid_from) and (b.valid_to is None or a.valid_from is None or b.valid_to > a.valid_from)
-
-
-def claim_view(row: Claim) -> dict:
-    return {"id": row.id, "scope_id": row.scope_id, "subject": row.subject, "predicate": row.predicate, "value": row.value, "status": row.status, "status_version": row.status_version, "valid_from": row.valid_from, "valid_to": row.valid_to, "recorded_at": row.recorded_at}
-
-
-def actor(principal: Credential) -> str:
-    return f"credential:{principal.id}"
-
-
-def require_human(principal: Credential) -> None:
-    if principal.role != CredentialRole.HUMAN.value:
-        raise HTTPException(403, "human review credential required")
+from ..config import Settings
+from ..core.domain import (
+    ALLOWED_TRANSITIONS,
+    SOURCE_AUTHORITY,
+    ClaimStatus,
+    ConflictDecision,
+    CredentialRole,
+    ExtractionStatus,
+    MemoryActionKind,
+    RelationshipKind,
+    ScopeKind,
+    SourceKind,
+)
+from ..memory.intelligence import (
+    MemoryIntelligence,
+    OllamaMemoryIntelligence,
+    OpenAIMemoryIntelligence,
+    claim_text,
+)
+from ..persistence.models import (
+    Agent,
+    Claim,
+    ClaimEmbedding,
+    ClaimRelationship,
+    ConflictReview,
+    Credential,
+    Event,
+    Evidence,
+    ExtractionRun,
+    MemoryAction,
+    Organization,
+    Project,
+    RetrievalEvent,
+    RetrievalItem,
+    Scope,
+    Session as AgentSession,
+)
+from .policies import actor, claim_view, overlap, require, require_human
+from .operator_views import operator_claim_views
+from .schemas import (
+    ClaimIn,
+    CredentialIn,
+    EventIn,
+    MemoryIn,
+    NameIn,
+    OrganizationIn,
+    RelationshipIn,
+    ReviewIn,
+    ScopeIn,
+    SessionIn,
+    StatusIn,
+)
 
 
 def create_app(settings: Settings | None = None, intelligence: MemoryIntelligence | None = None) -> FastAPI:
@@ -443,8 +342,9 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
         if not cases:
             return {"cases": []}
         claim_ids = {claim_id for case in cases for claim_id in (case.from_claim_id, case.to_claim_id)}
-        claims = {claim.id: claim for claim in db.scalars(select(Claim).where(Claim.organization_id == org, Claim.id.in_(claim_ids))).all()}
-        return {"cases": [{"id": case.id, "from_claim_id": case.from_claim_id, "to_claim_id": case.to_claim_id, "from_claim": claim_view(claims[case.from_claim_id]), "to_claim": claim_view(claims[case.to_claim_id]), "reason": case.reason, "created_at": case.created_at} for case in cases]}
+        claims = db.scalars(select(Claim).where(Claim.organization_id == org, Claim.id.in_(claim_ids))).all()
+        views = {claim["id"]: claim for claim in operator_claim_views(db, org, claims)}
+        return {"cases": [{"id": case.id, "from_claim_id": case.from_claim_id, "to_claim_id": case.to_claim_id, "from_claim": views[case.from_claim_id], "to_claim": views[case.to_claim_id], "reason": case.reason, "created_at": case.created_at} for case in cases]}
 
     @app.post("/conflicts/{case_id}/review")
     def review_conflict(case_id: UUID, body: ReviewIn, db: Db, org: Tenant, principal: Principal):
@@ -538,6 +438,207 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
             "retrievals": [{"id": retrieval.id, "created_at": retrieval.created_at} for retrieval in retrievals],
             "action_influence": "not_tracked",
         }
+
+    @app.get("/operator/context")
+    def operator_context(db: Db, org: Tenant, principal: Principal, scope_id: UUID | None = None):
+        organization = require(db.scalar(select(Organization).where(Organization.id == org)), "organization")
+        if scope_id is not None:
+            require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        projects = db.scalars(select(Project).where(Project.organization_id == org).order_by(Project.name, Project.id)).all()
+        scopes = db.scalars(select(Scope).where(Scope.organization_id == org).order_by(Scope.created_at, Scope.id)).all()
+        return {
+            "organization": {"id": organization.id, "name": organization.name},
+            "principal": {"id": principal.id, "role": principal.role, "label": principal.label},
+            "selected_scope_id": scope_id,
+            "projects": [{"id": row.id, "name": row.name, "created_at": row.created_at} for row in projects],
+            "scopes": [{"id": row.id, "project_id": row.project_id, "parent_id": row.parent_id, "kind": row.kind, "key": row.key, "created_at": row.created_at} for row in scopes],
+        }
+
+    @app.get("/operator/claims")
+    def operator_claims(
+        scope_id: UUID,
+        db: Db,
+        org: Tenant,
+        status: list[ClaimStatus] = Query(default=[]),
+        q: str | None = Query(default=None, min_length=1, max_length=500),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=25, ge=1, le=100),
+    ):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        filters = [Claim.organization_id == org, Claim.scope_id == scope_id]
+        if status:
+            filters.append(Claim.status.in_([item.value for item in status]))
+        if q:
+            pattern = f"%{q}%"
+            filters.append(or_(Claim.subject.ilike(pattern), Claim.predicate.ilike(pattern), cast(Claim.value, String).ilike(pattern)))
+        total = db.scalar(select(func.count()).select_from(Claim).where(*filters)) or 0
+        rows = db.scalars(
+            select(Claim)
+            .where(*filters)
+            .order_by(Claim.recorded_at.desc(), Claim.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        status_rows = db.execute(
+            select(Claim.status, func.count())
+            .where(Claim.organization_id == org, Claim.scope_id == scope_id)
+            .group_by(Claim.status)
+        ).all()
+        return {
+            "items": operator_claim_views(db, org, rows),
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "status_counts": {name: count for name, count in status_rows},
+        }
+
+    @app.get("/operator/review-queue")
+    def operator_review_queue(
+        scope_id: UUID,
+        db: Db,
+        org: Tenant,
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=50, ge=1, le=100),
+    ):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        total = db.scalar(select(func.count()).select_from(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status == ClaimStatus.CANDIDATE.value)) or 0
+        rows = db.scalars(
+            select(Claim)
+            .where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status == ClaimStatus.CANDIDATE.value)
+            .order_by(Claim.recorded_at, Claim.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        reviewed = select(ConflictReview.id).where(
+            ConflictReview.organization_id == ClaimRelationship.organization_id,
+            ConflictReview.case_relationship_id == ClaimRelationship.id,
+        ).exists()
+        conflict_count = db.scalar(
+            select(func.count()).select_from(ClaimRelationship)
+            .join(Claim, (ClaimRelationship.organization_id == Claim.organization_id) & (ClaimRelationship.from_claim_id == Claim.id))
+            .where(ClaimRelationship.organization_id == org, ClaimRelationship.kind == RelationshipKind.RELATED_TO.value, Claim.scope_id == scope_id, ~reviewed)
+        ) or 0
+        quarantined = db.scalar(select(func.count()).select_from(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status == ClaimStatus.QUARANTINED.value)) or 0
+        failed = db.scalar(
+            select(func.count()).select_from(ExtractionRun)
+            .join(Event, (ExtractionRun.organization_id == Event.organization_id) & (ExtractionRun.event_id == Event.id))
+            .where(ExtractionRun.organization_id == org, Event.scope_id == scope_id, ExtractionRun.status == ExtractionStatus.FAILED.value)
+        ) or 0
+        return {
+            "items": operator_claim_views(db, org, rows),
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "metrics": {"candidate": total, "conflicted": conflict_count, "quarantined": quarantined, "failed_extraction": failed},
+        }
+
+    @app.get("/operator/scopes")
+    def operator_scopes(db: Db, org: Tenant):
+        organization = require(db.scalar(select(Organization).where(Organization.id == org)), "organization")
+        projects = {row.id: row for row in db.scalars(select(Project).where(Project.organization_id == org)).all()}
+        scopes = db.scalars(select(Scope).where(Scope.organization_id == org).order_by(Scope.created_at, Scope.id)).all()
+        count_rows = db.execute(
+            select(Claim.scope_id, Claim.status, func.count()).where(Claim.organization_id == org).group_by(Claim.scope_id, Claim.status)
+        ).all()
+        counts: dict[UUID, dict[str, int]] = {}
+        for current_scope_id, current_status, count in count_rows:
+            counts.setdefault(current_scope_id, {})[current_status] = count
+        sessions = db.execute(
+            select(AgentSession.scope_id, Agent.id, Agent.name, func.count(AgentSession.id), func.max(AgentSession.created_at))
+            .join(Agent, (AgentSession.organization_id == Agent.organization_id) & (AgentSession.agent_id == Agent.id))
+            .where(AgentSession.organization_id == org)
+            .group_by(AgentSession.scope_id, Agent.id, Agent.name)
+        ).all()
+        agents_by_scope: dict[UUID, list[dict]] = {}
+        for current_scope_id, agent_id, name, session_count, last_active in sessions:
+            agents_by_scope.setdefault(current_scope_id, []).append({"id": agent_id, "name": name, "session_count": session_count, "last_active": last_active})
+        return {
+            "organization": {"id": organization.id, "name": organization.name},
+            "items": [{
+                "id": row.id,
+                "project_id": row.project_id,
+                "project_name": projects[row.project_id].name if row.project_id in projects else None,
+                "parent_id": row.parent_id,
+                "kind": row.kind,
+                "key": row.key,
+                "created_at": row.created_at,
+                "claim_counts": counts.get(row.id, {}),
+                "claim_total": sum(counts.get(row.id, {}).values()),
+                "agents": agents_by_scope.get(row.id, []),
+            } for row in scopes],
+        }
+
+    @app.get("/operator/retrievals")
+    def operator_retrievals(scope_id: UUID, db: Db, org: Tenant, limit: int = Query(default=50, ge=1, le=100)):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        rows = db.execute(
+            select(RetrievalEvent, func.count(RetrievalItem.claim_id))
+            .outerjoin(RetrievalItem, (RetrievalItem.organization_id == RetrievalEvent.organization_id) & (RetrievalItem.retrieval_id == RetrievalEvent.id))
+            .where(RetrievalEvent.organization_id == org, RetrievalEvent.scope_id == scope_id)
+            .group_by(RetrievalEvent.id)
+            .order_by(RetrievalEvent.created_at.desc(), RetrievalEvent.id.desc())
+            .limit(limit)
+        ).all()
+        return {"items": [{"id": row.id, "scope_id": row.scope_id, "predicate": row.predicate, "query_text": row.query_text, "method": row.method, "actor_ref": row.actor_ref, "created_at": row.created_at, "claim_count": count} for row, count in rows]}
+
+    @app.get("/operator/retrievals/{retrieval_id}")
+    def operator_retrieval_detail(retrieval_id: UUID, db: Db, org: Tenant):
+        retrieval = require(db.scalar(select(RetrievalEvent).where(RetrievalEvent.organization_id == org, RetrievalEvent.id == retrieval_id)), "retrieval")
+        claim_rows = db.scalars(
+            select(Claim)
+            .join(RetrievalItem, (RetrievalItem.organization_id == Claim.organization_id) & (RetrievalItem.claim_id == Claim.id))
+            .where(RetrievalItem.organization_id == org, RetrievalItem.retrieval_id == retrieval.id)
+            .order_by(Claim.recorded_at.desc(), Claim.id.desc())
+        ).all()
+        return {
+            "retrieval": {"id": retrieval.id, "scope_id": retrieval.scope_id, "predicate": retrieval.predicate, "query_text": retrieval.query_text, "method": retrieval.method, "actor_ref": retrieval.actor_ref, "created_at": retrieval.created_at},
+            "claims": operator_claim_views(db, org, claim_rows),
+            "similarity_scores": "not_recorded",
+            "filtering_diagnostics": "not_recorded",
+        }
+
+    @app.get("/operator/integrations")
+    def operator_integrations(db: Db, org: Tenant):
+        credentials = db.scalars(select(Credential).where(Credential.organization_id == org).order_by(Credential.created_at.desc(), Credential.id.desc())).all()
+        agents = db.scalars(select(Agent).where(Agent.organization_id == org).order_by(Agent.name, Agent.id)).all()
+        sessions = db.execute(
+            select(AgentSession.agent_id, func.count(AgentSession.id), func.max(AgentSession.created_at))
+            .where(AgentSession.organization_id == org)
+            .group_by(AgentSession.agent_id)
+        ).all()
+        activity = {agent_id: {"session_count": count, "last_active": last_active} for agent_id, count, last_active in sessions if agent_id}
+        extractions = db.scalars(select(ExtractionRun).where(ExtractionRun.organization_id == org).order_by(ExtractionRun.created_at.desc()).limit(20)).all()
+        return {
+            "credentials": [{"id": row.id, "role": row.role, "label": row.label, "created_at": row.created_at, "revoked_at": row.revoked_at} for row in credentials],
+            "agents": [{"id": row.id, "name": row.name, "created_at": row.created_at, **activity.get(row.id, {"session_count": 0, "last_active": None})} for row in agents],
+            "extractions": [{"id": row.id, "extractor_model": row.extractor_model, "embedding_model": row.embedding_model, "status": row.status, "error": row.error, "created_at": row.created_at} for row in extractions],
+            "raw_keys_exposed": False,
+        }
+
+    @app.get("/operator/audit")
+    def operator_audit(scope_id: UUID, db: Db, org: Tenant, limit: int = Query(default=100, ge=1, le=200)):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        rows = db.scalars(
+            select(MemoryAction)
+            .join(Claim, (MemoryAction.organization_id == Claim.organization_id) & (MemoryAction.claim_id == Claim.id))
+            .where(MemoryAction.organization_id == org, Claim.scope_id == scope_id)
+            .order_by(MemoryAction.created_at.desc(), MemoryAction.id.desc())
+            .limit(limit)
+        ).all()
+        return {"items": [{"id": row.id, "claim_id": row.claim_id, "action": row.action, "version": row.version, "old_status": row.old_status, "new_status": row.new_status, "reason": row.reason, "actor_ref": row.actor_ref, "credential_id": row.credential_id, "created_at": row.created_at} for row in rows]}
+
+    @app.get("/operator/overview")
+    def operator_overview(scope_id: UUID, db: Db, org: Tenant):
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        status_rows = db.execute(select(Claim.status, func.count()).where(Claim.organization_id == org, Claim.scope_id == scope_id).group_by(Claim.status)).all()
+        retrieval_count = db.scalar(select(func.count()).select_from(RetrievalEvent).where(RetrievalEvent.organization_id == org, RetrievalEvent.scope_id == scope_id)) or 0
+        event_count = db.scalar(select(func.count()).select_from(Event).where(Event.organization_id == org, Event.scope_id == scope_id)) or 0
+        failed_extractions = db.scalar(
+            select(func.count()).select_from(ExtractionRun)
+            .join(Event, (ExtractionRun.organization_id == Event.organization_id) & (ExtractionRun.event_id == Event.id))
+            .where(ExtractionRun.organization_id == org, Event.scope_id == scope_id, ExtractionRun.status == ExtractionStatus.FAILED.value)
+        ) or 0
+        return {"status_counts": {name: count for name, count in status_rows}, "retrieval_count": retrieval_count, "event_count": event_count, "failed_extraction_count": failed_extractions}
 
     return app
 
