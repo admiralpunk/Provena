@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from provena.models import Base
+from provena.persistence.models import Base
 
 config = context.config
 if config.config_file_name:
@@ -31,4 +31,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

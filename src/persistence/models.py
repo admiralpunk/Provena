@@ -7,7 +7,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import DateTime, Integer, String, Text
 from pgvector.sqlalchemy import Vector
 
-from .domain import ClaimStatus
+from ..core.domain import ClaimStatus
 
 
 class Base(DeclarativeBase):

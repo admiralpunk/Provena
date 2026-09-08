@@ -24,14 +24,22 @@ test = ["pytest>=8,<10", "httpx>=0.27,<1"]
 mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]
 
 [project.scripts]
-provena-mcp = "provena.mcp_server:main"
-provena-codex-capture = "provena.agent_capture_hook:main"
-provena-codex-retrieve = "provena.agent_context_hook:main"
-provena-agent-capture = "provena.agent_capture_hook:main"
-provena-agent-context = "provena.agent_context_hook:main"
+provena-mcp = "provena.integrations.mcp_server:main"
+provena-codex-capture = "provena.integrations.capture_hook:main"
+provena-codex-retrieve = "provena.integrations.context_hook:main"
+provena-agent-capture = "provena.integrations.capture_hook:main"
+provena-agent-context = "provena.integrations.context_hook:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+packages = [
+  "provena",
+  "provena.core",
+  "provena.integrations",
+  "provena.memory",
+  "provena.persistence",
+  "provena.web",
+]
+package-dir = {provena = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

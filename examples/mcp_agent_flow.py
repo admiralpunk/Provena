@@ -25,7 +25,7 @@ async def main() -> None:
         raise SystemExit(f"Set {', '.join(missing)} before running this example")
     server = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "provena.mcp_server"],
+        args=["-m", "provena.integrations.mcp_server"],
         env={name: os.environ[name] for name in ("PROVENA_API_KEY", "PROVENA_SCOPE_ID", "PROVENA_API_URL") if name in os.environ},
     )
     async with Client(server) as agent:
