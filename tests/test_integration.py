@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from provena.api import Settings, create_app
-from provena.intelligence import ExtractedFact
+from provena.memory.intelligence import ExtractedFact
 
 
 @pytest.fixture(scope="module")
@@ -222,7 +222,7 @@ def test_conflict_review_outcomes(client):
 
 def test_mcp_agent_flow(client):
     mcp = pytest.importorskip("mcp")
-    from provena.mcp_server import ProvenaHTTPClient, build_server
+    from provena.integrations.mcp_server import ProvenaHTTPClient, build_server
 
     organization, agent_headers = tenant(client)
     _, human_headers = credential(client, organization["id"])
@@ -265,7 +265,7 @@ def test_mcp_agent_flow(client):
 
 def test_mcp_explain_respects_configured_scope(client):
     pytest.importorskip("mcp")
-    from provena.mcp_server import ProvenaHTTPClient
+    from provena.integrations.mcp_server import ProvenaHTTPClient
 
     organization, headers = tenant(client)
     first = project(client, headers)["scope_id"]
@@ -309,7 +309,7 @@ def test_atomic_memory_write_and_candidate_review_boundary(client, url):
 
 
 def test_opt_in_conversation_capture(client):
-    from provena.capture import ConversationCapture
+    from provena.integrations.capture import ConversationCapture
 
     organization, agent = tenant(client)
     scope = project(client, agent)["scope_id"]
@@ -399,3 +399,78 @@ def test_automatic_extraction_and_semantic_candidate_retrieval(url):
     with pytest.raises(DBAPIError), engine.begin() as connection:
         connection.execute(text("UPDATE extraction_run SET status='failed' WHERE id=:id"), {"id": result["id"]})
     engine.dispose()
+
+
+def test_operator_reads_show_complete_ledger_without_recording_retrieval(client, url):
+    organization, agent_headers = tenant(client)
+    _, human_headers = credential(client, organization["id"], "human", "Console reviewer")
+    current_project = project(client, agent_headers)
+    scope_id = current_project["scope_id"]
+
+    candidate = claim(client, agent_headers, scope_id, event(client, agent_headers, scope_id), "PostgreSQL")
+    historical = claim(client, agent_headers, scope_id, event(client, agent_headers, scope_id, "MySQL"), "MySQL")
+    assert client.post(f"/claims/{historical['id']}/status", headers=human_headers, json={"status": "active", "reason": "accepted before migration"}).status_code == 200
+    assert client.post(f"/claims/{historical['id']}/status", headers=human_headers, json={"status": "superseded", "reason": "migration completed"}).status_code == 200
+
+    agent_retrieval = client.get("/claims", headers=agent_headers, params={"scope_id": scope_id})
+    assert agent_retrieval.status_code == 200
+    retrieval_id = agent_retrieval.json()["retrieval_id"]
+
+    engine = create_engine(url)
+    with engine.connect() as connection:
+        before = connection.scalar(text("SELECT count(*) FROM retrieval_event WHERE organization_id=:org"), {"org": organization["id"]})
+
+    ledger = client.get("/operator/claims", headers=agent_headers, params={"scope_id": scope_id, "page_size": 100})
+    assert ledger.status_code == 200, ledger.text
+    payload = ledger.json()
+    assert payload["total"] == 2
+    assert {item["status"] for item in payload["items"]} == {"candidate", "superseded"}
+    candidate_view = next(item for item in payload["items"] if item["id"] == candidate["id"])
+    assert candidate_view["authority"] == "low"
+    assert candidate_view["sources"][0]["payload"]["text"] == "Production uses PostgreSQL"
+    assert candidate_view["risk_assessment"] == "not_recorded"
+
+    filtered = client.get("/operator/claims", headers=agent_headers, params={"scope_id": scope_id, "status": "superseded", "q": "MySQL"})
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()["items"]] == [historical["id"]]
+
+    queue = client.get("/operator/review-queue", headers=agent_headers, params={"scope_id": scope_id}).json()
+    assert queue["metrics"]["candidate"] == 1
+    assert [item["id"] for item in queue["items"]] == [candidate["id"]]
+
+    context = client.get("/operator/context", headers=agent_headers, params={"scope_id": scope_id}).json()
+    assert context["organization"]["id"] == organization["id"]
+    assert context["principal"]["role"] == "agent"
+    assert any(item["id"] == scope_id for item in context["scopes"])
+
+    scopes = client.get("/operator/scopes", headers=agent_headers).json()
+    selected_scope = next(item for item in scopes["items"] if item["id"] == scope_id)
+    assert selected_scope["project_name"] == "sample"
+    assert selected_scope["claim_counts"]["candidate"] == 1
+    assert selected_scope["claim_counts"]["superseded"] == 1
+
+    retrievals = client.get("/operator/retrievals", headers=agent_headers, params={"scope_id": scope_id}).json()["items"]
+    assert retrievals[0]["id"] == retrieval_id
+    retrieval_detail = client.get(f"/operator/retrievals/{retrieval_id}", headers=agent_headers).json()
+    assert retrieval_detail["similarity_scores"] == "not_recorded"
+    assert any(item["id"] == candidate["id"] for item in retrieval_detail["claims"])
+
+    audit = client.get("/operator/audit", headers=agent_headers, params={"scope_id": scope_id}).json()["items"]
+    assert any(item["action"] == "status_changed" and item["claim_id"] == historical["id"] for item in audit)
+    overview = client.get("/operator/overview", headers=agent_headers, params={"scope_id": scope_id}).json()
+    assert overview["status_counts"]["candidate"] == 1
+    assert overview["retrieval_count"] == 1
+
+    integrations = client.get("/operator/integrations", headers=agent_headers).json()
+    assert integrations["raw_keys_exposed"] is False
+    assert all("api_key" not in item and "key_hash" not in item for item in integrations["credentials"])
+
+    with engine.connect() as connection:
+        after = connection.scalar(text("SELECT count(*) FROM retrieval_event WHERE organization_id=:org"), {"org": organization["id"]})
+    assert before == after
+    engine.dispose()
+
+    other_organization, other_headers = tenant(client)
+    assert other_organization["id"] != organization["id"]
+    assert client.get("/operator/claims", headers=other_headers, params={"scope_id": scope_id}).status_code == 404
+    assert client.get(f"/operator/retrievals/{retrieval_id}", headers=other_headers).status_code == 404

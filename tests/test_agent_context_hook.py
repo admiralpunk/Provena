@@ -3,7 +3,7 @@ import json
 
 import httpx
 
-from provena.agent_hooks import context_run as run
+from provena.integrations.hooks import context_run as run
 
 
 def test_retrieval_hook_injects_attributed_candidate_context():
@@ -39,7 +39,7 @@ def test_gemini_before_agent_uses_portable_hook_event_name():
     def handler(request):
         return httpx.Response(200, json={"claims": [{"id": "claim-1", "subject": "user", "predicate": "allergy", "value": {"food": "cheese"}, "status": "candidate", "sources": []}]})
 
-    from provena.agent_hooks import context_run
+    from provena.integrations.hooks import context_run
 
     output = io.StringIO()
     payload = {"hook_event_name": "BeforeAgent", "prompt": "pizza", "session_id": "gemini-1"}
