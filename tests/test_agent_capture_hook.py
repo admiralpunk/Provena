@@ -3,7 +3,7 @@ import json
 
 import httpx
 
-from provena.agent_hooks import capture_run as run
+from provena.integrations.hooks import capture_run as run
 
 
 SCOPE_ID = "fdf2203a-9909-4035-ad68-de28b6b1aa87"
@@ -67,7 +67,7 @@ def test_gemini_after_agent_captures_assistant_response():
             return httpx.Response(201, json={"status": "completed", "claims": []})
         return httpx.Response(201, json={"event": {"id": "gemini-event"}, "claim": None})
 
-    from provena.agent_hooks import capture_run
+    from provena.integrations.hooks import capture_run
 
     payload = {"hook_event_name": "AfterAgent", "session_id": "gemini-1", "prompt_response": "Use a cheese-free crust."}
     environment = {"PROVENA_API_KEY": "secret", "PROVENA_SCOPE_ID": SCOPE_ID, "PROVENA_AGENT_HOST": "gemini"}

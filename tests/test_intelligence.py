@@ -2,7 +2,7 @@ import json
 
 import httpx
 
-from provena.intelligence import OllamaMemoryIntelligence, StructuredFacts, parse_value_object
+from provena.memory.intelligence import OllamaMemoryIntelligence, StructuredFacts, parse_value_object
 
 
 def test_provider_schema_is_strict_and_supports_json_claim_values():

@@ -1,4 +1,4 @@
-from provena.domain import ALLOWED_TRANSITIONS, ClaimStatus, CredentialRole, SOURCE_AUTHORITY, SourceKind
+from provena.core.domain import ALLOWED_TRANSITIONS, ClaimStatus, CredentialRole, SOURCE_AUTHORITY, SourceKind
 
 
 def test_authority_does_not_promote_assistant_text():
