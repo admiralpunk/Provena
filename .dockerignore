@@ -1,0 +1,21 @@
+.git
+.agents
+.codex
+.env
+.env.*
+!.env.example
+.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.pytest_cache
+*.egg-info
+build
+dist
+docs
+examples
+frontend
+planning
+provena figma
+tests
+*.log
