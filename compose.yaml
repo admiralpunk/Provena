@@ -7,11 +7,14 @@ services:
       POSTGRES_PASSWORD: provena_dev
     ports:
       - "127.0.0.1:5437:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U provena"]
+      test: ["CMD-SHELL", "pg_isready -U provena -d provena"]
       interval: 2s
       timeout: 2s
       retries: 15
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama:0.34.2
@@ -19,6 +22,69 @@ services:
       - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ollama-models:
+    image: ollama/ollama:0.34.2
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'ollama pull "$${EXTRACTION_MODEL}" && ollama pull "$${EMBEDDING_MODEL}"'
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://provena:provena_dev@postgres:5432/provena
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:-replace-with-a-long-random-secret}
+      MEMORY_PROVIDER: ${MEMORY_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-models:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  console:
+    profiles: ["console"]
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    environment:
+      PROVENA_API_URL: http://api:8000
+      PROVENA_API_KEY: ${PROVENA_API_KEY:-}
+      PROVENA_SCOPE_ID: ${PROVENA_SCOPE_ID:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
+  postgres_data:
   ollama_data:
