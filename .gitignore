@@ -1,0 +1,42 @@
+# Local agent state
+.agents/
+
+# Python environments and build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+*.tsbuildinfo
+
+# Test and analysis output
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+.codex/
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Runtime output
+*.log
+
+# Local design exports; approved product assets belong in frontend/public/
+/provena figma/
