@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo.svg" width="96" height="96" alt="Provena logo">
+  <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" width="96" height="96" alt="Provena logo">
 </p>
 
 <!-- mcp-name: io.github.admiralpunk/provena-memory -->
@@ -111,9 +111,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.0/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.0/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.0/.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.1/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.1/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.1/.env.example
 cp .env.example .env
 ```
 

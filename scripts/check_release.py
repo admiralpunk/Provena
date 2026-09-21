@@ -21,7 +21,8 @@ def main() -> None:
     package_version = project["project"]["version"]
     distribution_name = project["project"]["name"]
     frontend_version = json.loads((ROOT / "frontend/package.json").read_text())["version"]
-    frontend_lock_version = json.loads((ROOT / "frontend/package-lock.json").read_text())["version"]
+    frontend_lock = json.loads((ROOT / "frontend/package-lock.json").read_text())
+    frontend_lock_version = frontend_lock["version"]
     server = json.loads((ROOT / "server.json").read_text())
     deploy_env = (ROOT / "deploy/.env.example").read_text()
     readme = (ROOT / "README.md").read_text()
@@ -29,10 +30,31 @@ def main() -> None:
     expected = {
         "frontend/package.json": frontend_version,
         "frontend/package-lock.json": frontend_lock_version,
+        "frontend/package-lock.json root package": frontend_lock["packages"][""]["version"],
         "server.json": server["version"],
         "server.json package": server["packages"][0]["version"],
     }
     mismatches = [f"{source} has {value}, expected {package_version}" for source, value in expected.items() if value != package_version]
+
+    required_version_text = {
+        "Dockerfile": f"ARG VERSION={package_version}",
+        "frontend/Dockerfile": f"ARG VERSION={package_version}",
+        "deploy/compose.yaml": f"PROVENA_VERSION:-{package_version}",
+        "src/cli.py": f'return "{package_version}"',
+        "src/web/app.py": f'version="{package_version}"',
+        "README.md release downloads": f"/releases/download/v{package_version}/compose.yaml",
+    }
+    versioned_files = {
+        "Dockerfile": ROOT / "Dockerfile",
+        "frontend/Dockerfile": ROOT / "frontend/Dockerfile",
+        "deploy/compose.yaml": ROOT / "deploy/compose.yaml",
+        "src/cli.py": ROOT / "src/cli.py",
+        "src/web/app.py": ROOT / "src/web/app.py",
+        "README.md release downloads": ROOT / "README.md",
+    }
+    for source, expected_text in required_version_text.items():
+        if expected_text not in versioned_files[source].read_text():
+            mismatches.append(f"{source} does not use version {package_version}")
     if not re.search(rf"^PROVENA_VERSION={re.escape(package_version)}$", deploy_env, re.MULTILINE):
         mismatches.append("deploy/.env.example does not use the package version")
     if server["packages"][0]["identifier"] != distribution_name:
