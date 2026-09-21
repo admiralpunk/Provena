@@ -64,6 +64,8 @@ def main() -> None:
     marker = f"<!-- mcp-name: {server['name']} -->"
     if marker not in readme:
         mismatches.append("README is missing the MCP Registry ownership marker")
+    if marker not in pypi_readme:
+        mismatches.append("PYPI.md is missing the MCP Registry ownership marker")
     if package_readme != "PYPI.md":
         mismatches.append("pyproject must use PYPI.md as the package description")
     if "python -m pip install provena-agent-memory" not in pypi_readme:

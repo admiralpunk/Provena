@@ -4,6 +4,12 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-22
+
+### Fixed
+
+- Include the MCP Registry ownership marker in the PyPI package description.
+
 ## [0.1.2] - 2026-09-22
 
 ### Changed
@@ -31,7 +37,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/admiralpunk/Provena/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/admiralpunk/Provena/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/admiralpunk/Provena/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/admiralpunk/Provena/releases/tag/v0.1.0

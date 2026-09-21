@@ -111,9 +111,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.2/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.2/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.2/.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.3/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.3/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.3/.env.example
 cp .env.example .env
 ```
 

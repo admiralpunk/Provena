@@ -106,17 +106,7 @@ jobs:
           tar xzf mcp-publisher.tar.gz mcp-publisher
       - run: ./mcp-publisher validate server.json
       - run: ./mcp-publisher login github-oidc
-      - name: Publish MCP Registry metadata
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if ./mcp-publisher publish server.json; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
+      - run: ./mcp-publisher publish server.json
 
   github-release:
     name: Create GitHub release

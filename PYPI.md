@@ -2,6 +2,8 @@
   <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" width="96" height="96" alt="Provena logo">
 </p>
 
+<!-- mcp-name: io.github.admiralpunk/provena-memory -->
+
 <h1 align="center">Provena</h1>
 
 <p align="center">
