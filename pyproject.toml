@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "provena-agent-memory"
-version = "0.1.1"
+version = "0.1.2"
 description = "Evidence-backed memory for AI agents"
-readme = "README.md"
+readme = "PYPI.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Aniket Kolte" }]

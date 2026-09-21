@@ -111,9 +111,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.1/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.1/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.1/.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.2/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.2/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.2/.env.example
 cp .env.example .env
 ```
 
@@ -271,21 +271,22 @@ PostgreSQL and Ollama use named volumes. Add `docker compose --profile console d
 
 ## Connect an AI Agent
 
-The published connector can run in an isolated environment through `uvx`; users do not need to clone Provena or install the server package. Generate a configuration using the **agent** credential and one exact scope:
+Install the published connector in a persistent Python environment. Generate a configuration using the **agent** credential and one exact scope:
 
 ```bash
+python3 -m venv ~/.venvs/provena
+~/.venvs/provena/bin/pip install provena-agent-memory
 export PROVENA_API_URL=http://127.0.0.1:8000
 export PROVENA_API_KEY=paste-agent-key
 export PROVENA_SCOPE_ID=paste-project-or-branch-scope-id
-uvx --from provena-agent-memory provena connect codex
+~/.venvs/provena/bin/provena connect codex
 ```
 
 Use `claude`, `gemini`, or `generic` instead of `codex` to print the corresponding JSON configuration. The resulting MCP command uses:
 
 ```json
 {
-  "command": "uvx",
-  "args": ["--from", "provena-agent-memory", "provena-mcp"],
+  "command": "/home/user/.venvs/provena/bin/provena-mcp",
   "env": {
     "PROVENA_API_URL": "http://127.0.0.1:8000",
     "PROVENA_API_KEY": "paste-agent-key",
@@ -297,7 +298,7 @@ Use `claude`, `gemini`, or `generic` instead of `codex` to print the correspondi
 After adding the configuration, verify the same credential and scope independently:
 
 ```bash
-uvx --from provena-agent-memory provena doctor
+~/.venvs/provena/bin/provena doctor
 ```
 
 The MCP adapter exposes:

@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import shlex
 import sys
+import sysconfig
 import urllib.error
 import urllib.request
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
 
@@ -22,7 +25,7 @@ def package_version() -> str:
     try:
         return version(PACKAGE_NAME)
     except PackageNotFoundError:
-        return "0.1.1"
+        return "0.1.2"
 
 
 def request_json(
@@ -97,7 +100,25 @@ def render_values(values: dict[str, str], output_format: str) -> str:
     return json.dumps(values, indent=2)
 
 
-def build_client_config(client: str, api_url: str, api_key: str, scope_id: str) -> str:
+def installed_mcp_command() -> str:
+    scripts = Path(sysconfig.get_path("scripts"))
+    for name in ("provena-mcp", "provena-mcp.exe"):
+        candidate = scripts / name
+        if candidate.is_file():
+            return str(candidate.resolve())
+    executable = shutil.which("provena-mcp")
+    if executable:
+        return str(Path(executable).resolve())
+    raise RuntimeError("provena-mcp was not found; reinstall provena-agent-memory in the active environment")
+
+
+def build_client_config(
+    client: str,
+    api_url: str,
+    api_key: str,
+    scope_id: str,
+    connector_command: str = "provena-mcp",
+) -> str:
     UUID(scope_id)
     environment = {
         "PROVENA_API_URL": api_url.rstrip("/"),
@@ -107,8 +128,7 @@ def build_client_config(client: str, api_url: str, api_key: str, scope_id: str) 
     if client == "codex":
         lines = [
             "[mcp_servers.provena]",
-            'command = "uvx"',
-            f'args = ["--from", "{PACKAGE_NAME}", "provena-mcp"]',
+            f"command = {json.dumps(connector_command)}",
             "",
             "[mcp_servers.provena.env]",
         ]
@@ -118,8 +138,7 @@ def build_client_config(client: str, api_url: str, api_key: str, scope_id: str) 
         {
             "mcpServers": {
                 "provena": {
-                    "command": "uvx",
-                    "args": ["--from", PACKAGE_NAME, "provena-mcp"],
+                    "command": connector_command,
                     "env": environment,
                 }
             }
@@ -177,6 +196,7 @@ def _connect_command(args: argparse.Namespace) -> int:
             args.api_url,
             _required(args.api_key, "PROVENA_API_KEY"),
             _required(args.scope_id, "PROVENA_SCOPE_ID"),
+            installed_mcp_command(),
         )
     )
     return 0

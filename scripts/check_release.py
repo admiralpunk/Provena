@@ -20,12 +20,14 @@ def main() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
     package_version = project["project"]["version"]
     distribution_name = project["project"]["name"]
+    package_readme = project["project"]["readme"]
     frontend_version = json.loads((ROOT / "frontend/package.json").read_text())["version"]
     frontend_lock = json.loads((ROOT / "frontend/package-lock.json").read_text())
     frontend_lock_version = frontend_lock["version"]
     server = json.loads((ROOT / "server.json").read_text())
     deploy_env = (ROOT / "deploy/.env.example").read_text()
     readme = (ROOT / "README.md").read_text()
+    pypi_readme = (ROOT / "PYPI.md").read_text()
 
     expected = {
         "frontend/package.json": frontend_version,
@@ -62,6 +64,16 @@ def main() -> None:
     marker = f"<!-- mcp-name: {server['name']} -->"
     if marker not in readme:
         mismatches.append("README is missing the MCP Registry ownership marker")
+    if package_readme != "PYPI.md":
+        mismatches.append("pyproject must use PYPI.md as the package description")
+    if "python -m pip install provena-agent-memory" not in pypi_readme:
+        mismatches.append("PYPI.md is missing the pip installation workflow")
+    if "https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" not in pypi_readme:
+        mismatches.append("PYPI.md is missing the absolute logo URL")
+    forbidden_pypi_commands = ("docker compose", "git clone", "uvx ")
+    for command in forbidden_pypi_commands:
+        if command in pypi_readme:
+            mismatches.append(f"PYPI.md contains alternate setup command: {command.strip()}")
     if args.tag and args.tag != f"v{package_version}":
         mismatches.append(f"tag {args.tag} does not match v{package_version}")
     if mismatches:
