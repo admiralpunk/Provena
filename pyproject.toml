@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provena"
+version = "0.1.0"
+description = "Evidence-backed memory for AI agents"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "pydantic-settings>=2.5,<3",
+  "sqlalchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "alembic>=1.13,<2",
+  "httpx>=0.27,<1",
+  "openai>=2,<3",
+  "pgvector>=0.3,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "httpx>=0.27,<1"]
+mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]
+
+[project.scripts]
+provena-mcp = "provena.integrations.mcp_server:main"
+provena-codex-capture = "provena.integrations.capture_hook:main"
+provena-codex-retrieve = "provena.integrations.context_hook:main"
+provena-agent-capture = "provena.integrations.capture_hook:main"
+provena-agent-context = "provena.integrations.context_hook:main"
+
+[tool.setuptools]
+packages = [
+  "provena",
+  "provena.core",
+  "provena.integrations",
+  "provena.memory",
+  "provena.persistence",
+  "provena.web",
+]
+package-dir = {provena = "src"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
