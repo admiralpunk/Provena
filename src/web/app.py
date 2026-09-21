@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from sqlalchemy import String, cast, create_engine, func, or_, select
+from sqlalchemy import String, cast, create_engine, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -107,6 +107,15 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
     def check_bootstrap(token: str | None) -> None:
         if not settings.bootstrap_token or not token or not secrets.compare_digest(token, settings.bootstrap_token):
             raise HTTPException(403, "bootstrap unavailable")
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "service": "provena"}
+
+    @app.get("/ready")
+    def ready(db: Db):
+        db.execute(text("SELECT 1"))
+        return {"status": "ready", "database": "reachable"}
 
     @app.post("/organizations", status_code=201)
     def create_organization(body: OrganizationIn, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):

@@ -24,6 +24,11 @@ def client(url):
         yield instance
 
 
+def test_health_and_readiness(client):
+    assert client.get("/health").json() == {"status": "ok", "service": "provena"}
+    assert client.get("/ready").json() == {"status": "ready", "database": "reachable"}
+
+
 def tenant(client):
     response = client.post("/organizations", headers={"X-Bootstrap-Token": "test-bootstrap-secret"}, json={"name": "test tenant"})
     assert response.status_code == 201, response.text
