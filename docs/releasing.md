@@ -60,7 +60,7 @@ The tag starts `.github/workflows/release.yml`, which:
 2. builds and checks the wheel and source distribution;
 3. waits for approval in the `pypi` environment;
 4. publishes to PyPI through short-lived OIDC credentials;
-5. publishes AMD64 and ARM64 API and console images to GHCR;
+5. publishes AMD64 and ARM64 API images and an AMD64 console image to GHCR;
 6. publishes `server.json` to the MCP Registry through GitHub OIDC; and
 7. creates a GitHub release with packages and deployment files.
 

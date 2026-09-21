@@ -56,10 +56,12 @@ jobs:
             context: .
             file: Dockerfile
             image: ghcr.io/admiralpunk/provena-server
+            platforms: linux/amd64,linux/arm64
           - name: console
             context: frontend
             file: frontend/Dockerfile
             image: ghcr.io/admiralpunk/provena-console
+            platforms: linux/amd64
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -76,7 +78,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           push: true
           build-args: VERSION=${{ steps.version.outputs.value }}
           tags: |
