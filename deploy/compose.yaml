@@ -1,0 +1,52 @@
+name: provena
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: provena
+      POSTGRES_USER: provena
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provena -d provena"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/admiralpunk/provena-server:${PROVENA_VERSION:-0.1.0}
+    environment:
+      DATABASE_URL: postgresql+psycopg://provena:${POSTGRES_PASSWORD}@postgres:5432/provena
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set BOOTSTRAP_TOKEN in .env}
+      MEMORY_PROVIDER: none
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  console:
+    profiles: ["console"]
+    image: ghcr.io/admiralpunk/provena-console:${PROVENA_VERSION:-0.1.0}
+    environment:
+      PROVENA_API_URL: http://api:8000
+      PROVENA_API_KEY: ${PROVENA_API_KEY:-}
+      PROVENA_SCOPE_ID: ${PROVENA_SCOPE_ID:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
