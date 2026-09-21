@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.admiralpunk/provena-memory",
+  "title": "Provena Agent Memory",
+  "description": "Evidence-backed, explainable persistent memory for MCP-compatible AI agents.",
+  "repository": {
+    "url": "https://github.com/admiralpunk/Provena",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "provena-agent-memory",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "PROVENA_API_URL",
+          "description": "Base URL of the Provena REST API",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "http://127.0.0.1:8000"
+        },
+        {
+          "name": "PROVENA_API_KEY",
+          "description": "Agent credential issued by the Provena service",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "PROVENA_SCOPE_ID",
+          "description": "Exact project or branch scope used for memory",
+          "isRequired": true,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

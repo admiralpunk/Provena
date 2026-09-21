@@ -2,6 +2,8 @@
   <img src="frontend/public/logo.svg" width="96" height="96" alt="Provena logo">
 </p>
 
+<!-- mcp-name: io.github.admiralpunk/provena-memory -->
+
 <h1 align="center">Provena</h1>
 
 <p align="center">
@@ -103,6 +105,35 @@ Model output never raises source authority or activates a claim. Candidate claim
 
 ## Getting Started
 
+### Fastest self-hosted release setup
+
+Published releases provide prebuilt API and console images. Download the three deployment files from the matching GitHub release, then create local configuration:
+
+```bash
+mkdir provena && cd provena
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.0/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.0/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.0/.env.example
+cp .env.example .env
+```
+
+Generate separate values for `POSTGRES_PASSWORD` and `BOOTSTRAP_TOKEN`, place them in `.env`, and start core mode:
+
+```bash
+python -c 'import secrets; print(secrets.token_urlsafe(32))'
+docker compose up -d postgres api
+docker compose exec api provena status --api-url http://127.0.0.1:8000
+docker compose exec api provena init --format shell
+```
+
+Core mode supports explicit memories and review without downloading a model. To enable local automatic extraction and semantic retrieval, add the Ollama override:
+
+```bash
+docker compose -f compose.yaml -f compose.ollama.yaml up -d
+```
+
+Save the one-time credentials printed by `provena init`. Add the human key and scope ID to `.env` before starting the optional console profile. See [`deploy/README.md`](deploy/README.md) for upgrades and backups.
+
 ### Prerequisites
 
 For local development:
@@ -114,11 +145,8 @@ For local development:
 
 For the containerized setup, only Docker Engine, Docker Compose, and `curl` are required.
 
-No Git remote is configured in this checkout. Set the clone URL for your repository or fork:
-
 ```bash
-export PROVENA_REPOSITORY_URL='paste-repository-clone-url'
-git clone "$PROVENA_REPOSITORY_URL" Provena
+git clone https://github.com/admiralpunk/Provena.git
 cd Provena
 ```
 
@@ -128,7 +156,7 @@ Install the Python service and its MCP and test dependencies:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e '.[test,mcp]'
+.venv/bin/pip install -e '.[server,test]'
 cp .env.example .env
 ```
 
@@ -150,7 +178,11 @@ set +a
 .venv/bin/uvicorn provena.api:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The API is now available at `http://127.0.0.1:8000`; interactive OpenAPI documentation is at `http://127.0.0.1:8000/docs`.
+The API is now available at `http://127.0.0.1:8000`; interactive OpenAPI documentation is at `http://127.0.0.1:8000/docs`. Verify API and database readiness with:
+
+```bash
+.venv/bin/provena status
+```
 
 In a second Bash terminal, load the same configuration and create a local organization, project scope, agent credential, and human review credential:
 
@@ -158,7 +190,7 @@ In a second Bash terminal, load the same configuration and create a local organi
 set -a
 source .env
 set +a
-eval "$(.venv/bin/python scripts/bootstrap_workspace.py --format shell)"
+eval "$(.venv/bin/provena init --format shell)"
 ```
 
 The bootstrap credentials are returned once and exported only in the current shell. Start the operator console with the human credential:
@@ -239,17 +271,33 @@ PostgreSQL and Ollama use named volumes. Add `docker compose --profile console d
 
 ## Connect an AI Agent
 
-Install the `mcp` optional dependency as shown in the local setup, then configure any stdio MCP host to launch Provena with an **agent** credential and one exact scope:
+The published connector can run in an isolated environment through `uvx`; users do not need to clone Provena or install the server package. Generate a configuration using the **agent** credential and one exact scope:
+
+```bash
+export PROVENA_API_URL=http://127.0.0.1:8000
+export PROVENA_API_KEY=paste-agent-key
+export PROVENA_SCOPE_ID=paste-project-or-branch-scope-id
+uvx --from provena-agent-memory provena connect codex
+```
+
+Use `claude`, `gemini`, or `generic` instead of `codex` to print the corresponding JSON configuration. The resulting MCP command uses:
 
 ```json
 {
-  "command": "/absolute/path/to/Provena/.venv/bin/provena-mcp",
+  "command": "uvx",
+  "args": ["--from", "provena-agent-memory", "provena-mcp"],
   "env": {
     "PROVENA_API_URL": "http://127.0.0.1:8000",
     "PROVENA_API_KEY": "paste-agent-key",
     "PROVENA_SCOPE_ID": "paste-project-or-branch-scope-id"
   }
 }
+```
+
+After adding the configuration, verify the same credential and scope independently:
+
+```bash
+uvx --from provena-agent-memory provena doctor
 ```
 
 The MCP adapter exposes:
@@ -328,10 +376,12 @@ src/
 alembic/           versioned PostgreSQL migrations
 frontend/          Next.js operator console
 scripts/           local setup helpers
+deploy/            versioned self-hosted release Compose files
 docs/adr/          durable architecture decisions
 examples/          deterministic MCP client flow
 tests/             domain and real-PostgreSQL integration tests
 compose.yaml       local PostgreSQL, Ollama, API, and optional console stack
+server.json        official MCP Registry package metadata
 ```
 
 Read [the architecture guide](docs/architecture.md) for current guarantees and limits. Accepted decisions live in [`docs/adr/`](docs/adr/).
@@ -345,3 +395,5 @@ Raw event payloads, claims, evidence, actions, extraction metadata, embeddings, 
 ## Contributing
 
 Keep changes small and preserve the evidence and tenant-boundary invariants. Use Alembic for schema changes, add real PostgreSQL coverage for database guarantees, and record durable architecture decisions in `docs/adr/`. Run the backend tests, frontend type check, and production build before opening a change.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow, [SECURITY.md](SECURITY.md) for private vulnerability reporting, and [CHANGELOG.md](CHANGELOG.md) for release history.

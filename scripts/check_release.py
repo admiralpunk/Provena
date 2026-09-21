@@ -1,0 +1,51 @@
+"""Validate that versioned public release metadata stays synchronized."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import tomllib
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tag", help="Optional release tag such as v0.1.0")
+    args = parser.parse_args()
+
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    package_version = project["project"]["version"]
+    distribution_name = project["project"]["name"]
+    frontend_version = json.loads((ROOT / "frontend/package.json").read_text())["version"]
+    frontend_lock_version = json.loads((ROOT / "frontend/package-lock.json").read_text())["version"]
+    server = json.loads((ROOT / "server.json").read_text())
+    deploy_env = (ROOT / "deploy/.env.example").read_text()
+    readme = (ROOT / "README.md").read_text()
+
+    expected = {
+        "frontend/package.json": frontend_version,
+        "frontend/package-lock.json": frontend_lock_version,
+        "server.json": server["version"],
+        "server.json package": server["packages"][0]["version"],
+    }
+    mismatches = [f"{source} has {value}, expected {package_version}" for source, value in expected.items() if value != package_version]
+    if not re.search(rf"^PROVENA_VERSION={re.escape(package_version)}$", deploy_env, re.MULTILINE):
+        mismatches.append("deploy/.env.example does not use the package version")
+    if server["packages"][0]["identifier"] != distribution_name:
+        mismatches.append("server.json package identifier differs from pyproject distribution name")
+    marker = f"<!-- mcp-name: {server['name']} -->"
+    if marker not in readme:
+        mismatches.append("README is missing the MCP Registry ownership marker")
+    if args.tag and args.tag != f"v{package_version}":
+        mismatches.append(f"tag {args.tag} does not match v{package_version}")
+    if mismatches:
+        raise SystemExit("Release metadata is inconsistent:\n- " + "\n- ".join(mismatches))
+    print(f"release metadata is consistent for {distribution_name} {package_version}")
+
+
+if __name__ == "__main__":
+    main()

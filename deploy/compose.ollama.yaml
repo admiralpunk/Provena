@@ -1,0 +1,38 @@
+services:
+  ollama:
+    image: ollama/ollama:0.34.2
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ollama-models:
+    image: ollama/ollama:0.34.2
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'ollama pull "$${EXTRACTION_MODEL}" && ollama pull "$${EMBEDDING_MODEL}"'
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    environment:
+      MEMORY_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    depends_on:
+      ollama-models:
+        condition: service_completed_successfully
+
+volumes:
+  ollama_data:

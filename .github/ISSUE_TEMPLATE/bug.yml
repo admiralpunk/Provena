@@ -1,0 +1,40 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys, private memory content, or security vulnerabilities. Report vulnerabilities privately through the Security tab.
+  - type: input
+    id: version
+    attributes:
+      label: Provena version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation
+      options: [Release Compose, Source checkout, PyPI connector, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
