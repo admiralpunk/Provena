@@ -72,7 +72,16 @@ def main() -> None:
         mismatches.append("PYPI.md is missing the pip installation workflow")
     if "https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" not in pypi_readme:
         mismatches.append("PYPI.md is missing the absolute logo URL")
-    forbidden_pypi_commands = ("docker compose", "git clone", "uvx ")
+    required_pypi_text = (
+        "Ask your Provena operator for these three values:",
+        "releases/latest/download/default.env.example",
+        "docker compose -f compose.yaml -f compose.ollama.yaml up -d",
+        'eval "$(provena init --format shell)"',
+    )
+    for expected_text in required_pypi_text:
+        if expected_text not in pypi_readme:
+            mismatches.append(f"PYPI.md is missing required onboarding text: {expected_text}")
+    forbidden_pypi_commands = ("git clone", "uvx ")
     for command in forbidden_pypi_commands:
         if command in pypi_readme:
             mismatches.append(f"PYPI.md contains alternate setup command: {command.strip()}")

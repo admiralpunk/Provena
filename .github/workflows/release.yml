@@ -120,6 +120,8 @@ jobs:
         with:
           name: python-distributions
           path: dist/
+      - name: Prepare deployment environment template
+        run: cp deploy/.env.example default.env.example
       - name: Create release with installation assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -128,7 +130,7 @@ jobs:
           dist/*
           deploy/compose.yaml
           deploy/compose.ollama.yaml
-          deploy/.env.example
+          default.env.example
           --verify-tag
           --generate-notes
           --title "Provena ${GITHUB_REF_NAME}"

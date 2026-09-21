@@ -13,7 +13,7 @@
 
 Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shared memory service. Every structured claim retains evidence pointing to its immutable source event, along with scope, authority, review state, validity time, conflicts, and retrieval history.
 
-## Install and connect
+## Install the connector
 
 Install the connector into a Python 3.11 or newer environment:
 
@@ -21,19 +21,80 @@ Install the connector into a Python 3.11 or newer environment:
 python -m pip install provena-agent-memory
 ```
 
+## Get access to a Provena service
+
+### Ask your Provena operator
+
 Ask your Provena operator for these three values:
 
 - the Provena API URL;
 - an agent API key; and
 - the project or branch scope ID the agent may access.
 
-Export them and verify access:
+Then continue to **Connect your agent** below.
+
+### Or host the server and local Ollama yourself
+
+You need Docker Engine with Docker Compose and `curl`. Download the current self-hosted release configuration:
+
+```bash
+mkdir provena-server
+cd provena-server
+curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.ollama.yaml
+curl -Lo .env https://github.com/admiralpunk/Provena/releases/latest/download/default.env.example
+```
+
+Replace the placeholder database and bootstrap secrets automatically:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import secrets
+
+path = Path(".env")
+text = path.read_text()
+text = text.replace("replace-with-a-random-database-password", secrets.token_urlsafe(32))
+text = text.replace("replace-with-a-long-random-bootstrap-token", secrets.token_urlsafe(32))
+path.write_text(text)
+PY
+```
+
+Start PostgreSQL, Provena, Ollama, and the local extraction and embedding models:
+
+```bash
+docker compose -f compose.yaml -f compose.ollama.yaml up -d
+docker compose -f compose.yaml -f compose.ollama.yaml logs -f ollama-models api
+```
+
+The first start downloads the configured Ollama models. Press `Ctrl+C` after the model download finishes and the API reports that it is ready; the containers remain running.
+
+Load the local bootstrap token, initialize a workspace, and select the issued agent credential:
+
+```bash
+set -a
+. ./.env
+set +a
+export PROVENA_API_URL="http://127.0.0.1:8000"
+eval "$(provena init --format shell)"
+export PROVENA_API_KEY="$PROVENA_AGENT_KEY"
+```
+
+`provena init` also returns `PROVENA_HUMAN_KEY`. Keep that reviewer credential and `BOOTSTRAP_TOKEN` private. Do not place either one in an agent configuration.
+
+## Connect your agent
+
+The self-hosted steps already set the required values in your shell. If an operator provided them instead, export them now:
 
 ```bash
 export PROVENA_API_URL="https://memory.example.com"
 export PROVENA_API_KEY="paste-agent-key"
 export PROVENA_SCOPE_ID="paste-scope-id"
+```
 
+Verify the service, credential, and scope:
+
+```bash
 provena doctor
 ```
 
@@ -54,9 +115,9 @@ After adding the printed configuration to the client, restart the client. Proven
 | `provena doctor` | Verify API, database, credential, and scope access. |
 | `provena connect CLIENT` | Print MCP configuration for an installed connector. |
 | `provena status` | Check service health without authenticating. |
-| `provena init` | Operator-only bootstrap of a running service; requires `BOOTSTRAP_TOKEN`. |
+| `provena init` | Bootstrap a running self-hosted service; requires `BOOTSTRAP_TOKEN`. |
 
-The pip package is the agent connector. It does not embed PostgreSQL or start a Provena API. Operators can find server deployment, security, backup, development, and architecture documentation in the [GitHub repository](https://github.com/admiralpunk/Provena).
+The pip package is the agent connector. The self-hosted path runs PostgreSQL, Provena, and Ollama as separate containers. Operators can find security, backup, development, and architecture documentation in the [GitHub repository](https://github.com/admiralpunk/Provena).
 
 ## Why provenance matters
 
