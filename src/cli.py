@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
 
+from .integrations.codex_setup import install_codex
+from .integrations.connection_config import default_config_home, load_connection_environment
+from .quickstart import default_state_dir, prepare_release, require_local_tools, start_automatic_memory_and_console, start_core, update_env, wait_until_ready
+
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
 PACKAGE_NAME = "provena-agent-memory"
@@ -25,7 +29,7 @@ def package_version() -> str:
     try:
         return version(PACKAGE_NAME)
     except PackageNotFoundError:
-        return "0.1.6"
+        return "0.1.7"
 
 
 def request_json(
@@ -100,16 +104,20 @@ def render_values(values: dict[str, str], output_format: str) -> str:
     return json.dumps(values, indent=2)
 
 
-def installed_mcp_command() -> str:
+def installed_command(name: str) -> str:
     scripts = Path(sysconfig.get_path("scripts"))
-    for name in ("provena-mcp", "provena-mcp.exe"):
-        candidate = scripts / name
+    for filename in (name, f"{name}.exe"):
+        candidate = scripts / filename
         if candidate.is_file():
             return str(candidate.resolve())
-    executable = shutil.which("provena-mcp")
+    executable = shutil.which(name)
     if executable:
         return str(Path(executable).resolve())
-    raise RuntimeError("provena-mcp was not found; reinstall provena-agent-memory in the active environment")
+    raise RuntimeError(f"{name} was not found; reinstall provena-agent-memory in the active environment")
+
+
+def installed_mcp_command() -> str:
+    return installed_command("provena-mcp")
 
 
 def build_client_config(
@@ -190,15 +198,110 @@ def _doctor_command(args: argparse.Namespace) -> int:
 
 
 def _connect_command(args: argparse.Namespace) -> int:
+    api_key = _required(args.api_key, "PROVENA_API_KEY")
+    scope_id = _required(args.scope_id, "PROVENA_SCOPE_ID")
+    if args.install:
+        if args.client != "codex":
+            raise RuntimeError("--install currently supports Codex; print the configuration for other clients without --install")
+        _doctor_command(args)
+        installed = install_codex(
+            args.api_url,
+            api_key,
+            scope_id,
+            mcp_command=installed_mcp_command(),
+            context_command=installed_command("provena-agent-context"),
+            capture_command=installed_command("provena-agent-capture"),
+        )
+        print(json.dumps({"status": "installed", "client": "codex", "automatic_memory": True, **installed}, indent=2))
+        print("Restart Codex, open /hooks, and trust the Provena hook definitions.", file=sys.stderr)
+        return 0
     print(
         build_client_config(
             args.client,
             args.api_url,
-            _required(args.api_key, "PROVENA_API_KEY"),
-            _required(args.scope_id, "PROVENA_SCOPE_ID"),
+            api_key,
+            scope_id,
             installed_mcp_command(),
         )
     )
+    return 0
+
+
+def _existing_quickstart_connection(api_url: str) -> dict[str, str] | None:
+    path = default_config_home() / "provena" / "codex.json"
+    if not path.exists():
+        return None
+    try:
+        environment = load_connection_environment({}, path)
+        request_json(
+            api_url,
+            f"/claims?scope_id={environment['PROVENA_SCOPE_ID']}&limit=1",
+            headers={"X-API-Key": environment["PROVENA_API_KEY"]},
+        )
+        return environment
+    except (KeyError, RuntimeError):
+        return None
+
+
+def _quickstart_command(args: argparse.Namespace) -> int:
+    require_local_tools(args.client)
+    state_dir = Path(args.state_dir).expanduser().resolve()
+    current_version = package_version()
+    print(f"Preparing Provena {current_version} in {state_dir}...")
+    deployment = prepare_release(current_version, state_dir)
+    print("Starting PostgreSQL and the Provena API...")
+    start_core(state_dir, deployment)
+
+    api_url = "http://127.0.0.1:8000"
+    existing = _existing_quickstart_connection(api_url)
+    if existing:
+        agent_key = existing["PROVENA_API_KEY"]
+        scope_id = existing["PROVENA_SCOPE_ID"]
+        print("Reusing the existing Provena agent credential and scope.")
+    else:
+        workspace = bootstrap_workspace(
+            api_url,
+            deployment["BOOTSTRAP_TOKEN"],
+            args.organization,
+            args.project,
+        )
+        agent_key = workspace["PROVENA_AGENT_KEY"]
+        scope_id = workspace["PROVENA_SCOPE_ID"]
+        update_env(
+            state_dir / ".env",
+            {
+                "PROVENA_API_KEY": workspace["PROVENA_HUMAN_KEY"],
+                "PROVENA_SCOPE_ID": scope_id,
+            },
+        )
+        print("Created a local organization, project scope, and separate agent and reviewer credentials.")
+
+    installed = install_codex(
+        api_url,
+        agent_key,
+        scope_id,
+        mcp_command=installed_mcp_command(),
+        context_command=installed_command("provena-agent-context"),
+        capture_command=installed_command("provena-agent-capture"),
+    )
+    print("Configured Codex MCP plus automatic memory capture and retrieval.")
+    print("Starting local Ollama models and the Provena console; the first model download can take several minutes...")
+    start_automatic_memory_and_console(state_dir)
+    wait_until_ready(api_url)
+    print(
+        json.dumps(
+            {
+                "status": "ready",
+                "api_url": api_url,
+                "console_url": f"http://127.0.0.1:3000/overview?scope={scope_id}",
+                "scope_id": scope_id,
+                "state_dir": str(state_dir),
+                **installed,
+            },
+            indent=2,
+        )
+    )
+    print("Restart Codex, open /hooks, trust the Provena hooks, and then use Codex normally.", file=sys.stderr)
     return 0
 
 
@@ -225,12 +328,20 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--scope-id", default=os.getenv("PROVENA_SCOPE_ID"))
     doctor.set_defaults(handler=_doctor_command)
 
-    connect = commands.add_parser("connect", help="Print an MCP configuration for an agent client.")
+    connect = commands.add_parser("connect", help="Configure Codex or print MCP configuration for an agent client.")
     connect.add_argument("client", choices=("codex", "claude", "gemini", "generic"))
     connect.add_argument("--api-url", default=os.getenv("PROVENA_API_URL", DEFAULT_API_URL))
     connect.add_argument("--api-key", default=os.getenv("PROVENA_API_KEY"))
     connect.add_argument("--scope-id", default=os.getenv("PROVENA_SCOPE_ID"))
+    connect.add_argument("--install", action="store_true", help="Install Codex MCP plus automatic capture and retrieval hooks.")
     connect.set_defaults(handler=_connect_command)
+
+    quickstart = commands.add_parser("quickstart", help="Start local Provena and configure automatic agent memory.")
+    quickstart.add_argument("client", nargs="?", choices=("codex",), default="codex")
+    quickstart.add_argument("--state-dir", default=str(default_state_dir()))
+    quickstart.add_argument("--organization", default="Local development")
+    quickstart.add_argument("--project", default="provena-demo")
+    quickstart.set_defaults(handler=_quickstart_command)
     return parser
 
 

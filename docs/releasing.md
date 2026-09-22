@@ -10,7 +10,8 @@ Provena's public distribution uses services that are free for public open-source
 4. On PyPI, add a pending Trusted Publisher with:
    - project: `provena-agent-memory`
    - owner: `admiralpunk`
-   - repository: `Provena`
+   - repository: `Provena
+   `
    - workflow: `release.yml`
    - environment: `pypi`
 5. After the first image release, set the two GHCR packages to public visibility. Public packages do not require users to authenticate when pulling.
@@ -50,7 +51,7 @@ docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --qu
 Create the release only from a reviewed commit with green CI:
 
 ```bash
-VERSION=0.1.6
+VERSION=0.1.7
 git tag -a "v${VERSION}" -m "Provena ${VERSION}"
 git push origin "v${VERSION}"
 ```

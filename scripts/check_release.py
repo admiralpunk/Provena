@@ -84,6 +84,9 @@ def main() -> None:
         "if [ ! -f .env ]; then",
         "Recover from a database password mismatch",
         "ALTER ROLE provena WITH PASSWORD",
+        "provena quickstart codex",
+        "provena connect codex --install",
+        "without requiring you to mention Provena",
     )
     for expected_text in required_pypi_text:
         if expected_text not in pypi_readme:

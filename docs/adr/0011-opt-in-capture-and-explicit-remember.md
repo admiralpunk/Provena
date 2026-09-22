@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Update: ADR 0020 keeps explicit opt-in as the installation boundary and makes automatic capture and retrieval the default after a user runs the Codex installer or quickstart command.
+
 Conversation capture is an integration behavior, not an MCP server capability. A host must opt in and send each turn it wants preserved. The API provides one atomic write that saves a source event and, when the caller supplies a structured proposition, a candidate claim with evidence to that event. A successful response confirms both IDs, scope, status, and authority. A failed claim creation rolls back the event too. The API does not infer claims from arbitrary text.
 
 The MCP adapter exposes a convenience `memory_remember` tool for an agent's own inference. It cannot assert that it directly authenticated a user. A host capture helper may submit user turns as `user_statement`, but with an agent credential those events remain low authority and are visibly attributable to that agent credential. A future trusted host identity design is required before host-attested user statements can receive medium authority without holding a human review credential.

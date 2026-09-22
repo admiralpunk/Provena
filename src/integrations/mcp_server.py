@@ -1,11 +1,14 @@
 """Local stdio MCP adapter. All authority decisions remain in the REST API."""
 
+import argparse
 import os
 from typing import Any, Literal
 from uuid import UUID
 
 import httpx
 from mcp.server import MCPServer
+
+from .connection_config import load_connection_environment
 
 
 class ProvenaHTTPClient:
@@ -116,14 +119,18 @@ def build_server(client: ProvenaHTTPClient) -> MCPServer:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the Provena stdio MCP connector.")
+    parser.add_argument("--config", help="Protected Provena connection JSON file")
+    args = parser.parse_args()
+    environment = load_connection_environment(os.environ, args.config)
     required = ("PROVENA_API_KEY", "PROVENA_SCOPE_ID")
-    missing = [name for name in required if not os.environ.get(name)]
+    missing = [name for name in required if not environment.get(name)]
     if missing:
         raise SystemExit(f"Missing MCP configuration: {', '.join(missing)}")
     client = ProvenaHTTPClient(
-        os.environ.get("PROVENA_API_URL", "http://127.0.0.1:8000"),
-        os.environ["PROVENA_API_KEY"],
-        os.environ["PROVENA_SCOPE_ID"],
+        environment.get("PROVENA_API_URL", "http://127.0.0.1:8000"),
+        environment["PROVENA_API_KEY"],
+        environment["PROVENA_SCOPE_ID"],
     )
     build_server(client).run(transport="stdio")
 

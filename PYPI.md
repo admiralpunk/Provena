@@ -13,15 +13,37 @@
 
 Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shared memory service. Every structured claim retains evidence pointing to its immutable source event, along with scope, authority, review state, validity time, conflicts, and retrieval history.
 
-## Install the connector
+## Get started
 
-Install the connector into a Python 3.11 or newer environment:
+You need Python 3.11 or newer, Docker Engine with Docker Compose, and Codex. Install Provena, then run the local quickstart:
 
 ```bash
 python -m pip install provena-agent-memory
+provena quickstart codex
 ```
 
-## Get access to a Provena service
+The quickstart downloads the matching deployment files, preserves an existing local database, starts PostgreSQL and local Ollama models, creates separate agent and reviewer credentials, connects Codex, enables automatic memory capture and retrieval, and starts the browser console. The first run can take several minutes while Ollama downloads the models.
+
+Restart Codex, enter `/hooks`, and trust the Provena hooks. You can then use Codex normally: prompts and final responses are captured as immutable evidence, candidate facts are extracted, and relevant claims are added to later turns without requiring you to mention Provena. The command prints the exact console URL when setup completes.
+
+### Connect to an existing Provena service
+
+Ask your operator for the API URL, agent API key, and project or branch scope ID. Then run:
+
+```bash
+export PROVENA_API_URL="https://memory.example.com"
+export PROVENA_API_KEY="paste-agent-key"
+export PROVENA_SCOPE_ID="paste-scope-id"
+provena connect codex --install
+```
+
+This validates the service, installs the MCP connection, and merges the automatic hooks into Codex while preserving unrelated hooks. Restart Codex and approve them through `/hooks`.
+
+`pip install` does not silently modify Codex or begin recording conversations. Running `quickstart` or `connect --install` is the explicit opt-in; automatic memory becomes the default after that point.
+
+## Manual service setup
+
+Use this section when you need to manage the service and credentials yourself.
 
 ### Ask your Provena operator
 
@@ -86,7 +108,7 @@ export PROVENA_API_KEY="$PROVENA_AGENT_KEY"
 
 `provena init` also returns `PROVENA_HUMAN_KEY`. Keep that reviewer credential and `BOOTSTRAP_TOKEN` private. Do not place either one in an agent configuration.
 
-## Connect your agent
+## Manual connector configuration
 
 The self-hosted steps already set the required values in your shell. If an operator provided them instead, export them now:
 
@@ -106,7 +128,13 @@ The generated client configuration points to the `provena-mcp` executable instal
 
 ### Connect Codex
 
-Run:
+To install MCP and automatic hooks in one step, run:
+
+```bash
+provena connect codex --install
+```
+
+To print the MCP configuration without changing Codex configuration, run:
 
 ```bash
 provena connect codex
@@ -138,16 +166,16 @@ codex mcp list
 
 Inside the Codex terminal UI, enter `/mcp` and confirm that `provena` is active. Codex documents both the shared `~/.codex/config.toml` file and `/mcp` in its [MCP setup guide](https://developers.openai.com/docs/extend/mcp?surface=cli).
 
-Record and retrieve a memory with prompts such as:
+With the automatic hooks installed, record a memory with an ordinary prompt:
 
 ```text
-Using Provena, remember that I am allergic to cheese. Return the event and claim IDs.
+I am allergic to cheese.
 ```
 
 Then open a new Codex session and ask:
 
 ```text
-Using Provena memory, suggest pizza ideas suitable for me.
+Suggest pizza ideas for me.
 ```
 
 To inspect provenance, ask Codex to search Provena for the relevant memory and call `memory_explain` on the returned claim.
@@ -229,8 +257,10 @@ This changes only the PostgreSQL login credential. It preserves events, claims, 
 
 | Command | Purpose |
 | --- | --- |
+| `provena quickstart codex` | Start a complete local stack, configure Codex, enable automatic memory, and start the console. |
 | `provena doctor` | Verify API, database, credential, and scope access. |
-| `provena connect CLIENT` | Print MCP configuration for an installed connector. |
+| `provena connect codex --install` | Install MCP plus automatic capture and retrieval for an existing service. |
+| `provena connect CLIENT` | Print MCP configuration without changing the client. |
 | `provena status` | Check service health without authenticating. |
 | `provena init` | Bootstrap a running self-hosted service; requires `BOOTSTRAP_TOKEN`. |
 

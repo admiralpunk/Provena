@@ -4,6 +4,19 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-23
+
+### Added
+
+- Add `provena quickstart codex` for version-matched local deployment, bootstrap, Codex setup, automatic memory, and console startup.
+- Add `provena connect codex --install` for one-command MCP and lifecycle-hook configuration against an existing service.
+- Store the agent connection once in a protected file referenced by MCP and hooks.
+
+### Fixed
+
+- Render claim status review in a top-layer modal so fixed navigation and clipped review cards cannot cover the form.
+- Preserve unrelated Codex hooks and replace earlier Provena handlers idempotently.
+
 ## [0.1.6] - 2026-09-23
 
 ### Fixed
@@ -58,7 +71,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/admiralpunk/Provena/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/admiralpunk/Provena/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/admiralpunk/Provena/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/admiralpunk/Provena/compare/v0.1.3...v0.1.4
