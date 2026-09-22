@@ -42,7 +42,9 @@ mkdir provena-server
 cd provena-server
 curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.yaml
 curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.ollama.yaml
-curl -Lo .env https://github.com/admiralpunk/Provena/releases/latest/download/default.env.example
+if [ ! -f .env ]; then
+  curl -Lo .env https://github.com/admiralpunk/Provena/releases/latest/download/default.env.example
+fi
 ```
 
 Replace the placeholder database and bootstrap secrets automatically:
@@ -59,6 +61,8 @@ text = text.replace("replace-with-a-long-random-bootstrap-token", secrets.token_
 path.write_text(text)
 PY
 ```
+
+Keep this `.env` file when updating or redownloading the Compose files. PostgreSQL stores its initialized password in the persistent database volume; replacing `.env` with a newly generated password does not change the password inside an existing volume.
 
 Start PostgreSQL, Provena, Ollama, and the local extraction and embedding models:
 
@@ -200,6 +204,26 @@ http://127.0.0.1:3000/overview
 ```
 
 The API documentation is available at `http://127.0.0.1:8000/docs`. Add `?scope=YOUR_SCOPE_ID` to the console URL to select a scope explicitly.
+
+### Recover from a database password mismatch
+
+If the API log reports `password authentication failed for user "provena"`, preserve the database volume and synchronize its role password with the current `.env` value:
+
+```bash
+set -a
+. ./.env
+set +a
+
+docker compose exec -e NEW_PASSWORD="$POSTGRES_PASSWORD" -T postgres \
+  psql -v ON_ERROR_STOP=1 -U provena -d provena <<'SQL'
+\getenv role_password NEW_PASSWORD
+ALTER ROLE provena WITH PASSWORD :'role_password';
+SQL
+
+docker compose -f compose.yaml -f compose.ollama.yaml restart api
+```
+
+This changes only the PostgreSQL login credential. It preserves events, claims, evidence, audit records, and the database volume.
 
 ## Command roles
 

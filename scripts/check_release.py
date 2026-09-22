@@ -81,6 +81,9 @@ def main() -> None:
         "codex mcp list",
         "--profile console up -d console",
         "PROVENA_HUMAN_KEY",
+        "if [ ! -f .env ]; then",
+        "Recover from a database password mismatch",
+        "ALTER ROLE provena WITH PASSWORD",
     )
     for expected_text in required_pypi_text:
         if expected_text not in pypi_readme:

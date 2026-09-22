@@ -75,7 +75,7 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
             raise ValueError("MEMORY_PROVIDER must be ollama, openai, or none")
     engine = create_engine(settings.database_url, pool_pre_ping=True)
     factory = sessionmaker(engine, expire_on_commit=False)
-    app = FastAPI(title="Provena", version="0.1.5")
+    app = FastAPI(title="Provena", version="0.1.6")
 
     def db_session():
         with factory() as db:

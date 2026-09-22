@@ -4,6 +4,13 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-23
+
+### Fixed
+
+- Preserve an existing self-hosted `.env` when refreshing release files.
+- Document data-preserving recovery when the API and an existing PostgreSQL volume use different passwords.
+
 ## [0.1.5] - 2026-09-22
 
 ### Changed
@@ -51,7 +58,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/admiralpunk/Provena/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/admiralpunk/Provena/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/admiralpunk/Provena/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/admiralpunk/Provena/compare/v0.1.2...v0.1.3
