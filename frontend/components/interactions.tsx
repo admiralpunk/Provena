@@ -62,8 +62,22 @@ export function AssertClaimDialog({ scopeId }: { scopeId: string }) {
 }
 
 export function ClaimStatusControl({ claimId, transitions, compact = false }: { claimId: string; transitions: Array<{ status: string; label: string }>; compact?: boolean }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   const [state, action, pending] = useActionState(changeClaimStatus, null);
-  return <details className={compact ? "review-action-menu" : "claim-review-menu"}><summary>Change status</summary><form action={action}><input type="hidden" name="claim_id" value={claimId}/><label>Immutable reviewer reason<input name="reason" required minLength={3} maxLength={2000} placeholder="Why should this status change?"/></label><div className="cluster">{transitions.map(item=><button disabled={pending} key={item.status} name="status" value={item.status}>{pending ? "Saving…" : item.label}</button>)}</div><ActionMessage state={state}/></form></details>;
+  const titleId = `status-title-${claimId}`;
+  return <>
+    <Button compact={compact} disabled={!transitions.length} title={transitions.length ? "Review and change this claim's status" : "No status transitions are available"} onClick={() => dialog.current?.showModal()}>Change status</Button>
+    <dialog className="modal status-modal" ref={dialog} aria-labelledby={titleId}>
+      <div className="modal-head"><div><span className="eyebrow">AUDITED REVIEW ACTION</span><h2 id={titleId}>Change claim status</h2></div><button type="button" className="icon-button" aria-label="Close status form" onClick={() => dialog.current?.close()}><X size={18}/></button></div>
+      <form action={action} className="modal-body status-form">
+        <input type="hidden" name="claim_id" value={claimId}/>
+        <p className="notice">This records a new status action. The claim, original event, and evidence link remain in the audit history.</p>
+        <label>Immutable reviewer reason<input name="reason" required minLength={3} maxLength={2000} placeholder="Why should this status change?" autoFocus/></label>
+        <ActionMessage state={state}/>
+        <div className="modal-actions status-transition-actions"><Button type="button" onClick={() => dialog.current?.close()}>Cancel</Button>{transitions.map(item=><Button type="submit" variant={item.status === "deleted" || item.status === "quarantined" ? "danger" : "primary"} disabled={pending} key={item.status} name="status" value={item.status}>{pending ? "Saving…" : item.label}</Button>)}</div>
+      </form>
+    </dialog>
+  </>;
 }
 
 export function ConflictDecisionForm({ caseId, decision, title, description, supersedingClaimId }: { caseId: string; decision: string; title: string; description: string; supersedingClaimId?: string }) {
