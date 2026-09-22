@@ -4,6 +4,13 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-22
+
+### Changed
+
+- Document the complete Codex MCP configuration and verification workflow on PyPI.
+- Explain how operators start the browser console with a human reviewer credential.
+
 ## [0.1.4] - 2026-09-22
 
 ### Changed
@@ -44,7 +51,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/admiralpunk/Provena/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/admiralpunk/Provena/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/admiralpunk/Provena/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/admiralpunk/Provena/compare/v0.1.1...v0.1.2

@@ -98,15 +98,108 @@ Verify the service, credential, and scope:
 provena doctor
 ```
 
-Generate the MCP configuration for your client:
+The generated client configuration points to the `provena-mcp` executable installed by pip, so keep that Python environment available to the agent client.
+
+### Connect Codex
+
+Run:
 
 ```bash
 provena connect codex
 ```
 
-Use `claude`, `gemini`, or `generic` in place of `codex` when needed. The generated configuration points to the `provena-mcp` executable installed by pip, so keep that Python environment available to the agent client.
+The command prints a complete Codex MCP section containing the absolute path to the connector and the three connection values:
 
-After adding the printed configuration to the client, restart the client. Provena then exposes MCP tools for attributed retrieval, explicit memory capture, candidate claims, and `memory_explain` provenance traces.
+```toml
+[mcp_servers.provena]
+command = "/absolute/path/to/python-environment/bin/provena-mcp"
+
+[mcp_servers.provena.env]
+PROVENA_API_URL = "https://memory.example.com"
+PROVENA_API_KEY = "agent-api-key"
+PROVENA_SCOPE_ID = "project-or-branch-scope-id"
+```
+
+Copy the printed section into `~/.codex/config.toml`. If that file already contains `[mcp_servers.provena]`, replace the existing Provena section instead of adding a duplicate. Protect the file because it contains the agent API key:
+
+```bash
+chmod 600 ~/.codex/config.toml
+```
+
+Restart Codex and verify the connection:
+
+```bash
+codex mcp list
+```
+
+Inside the Codex terminal UI, enter `/mcp` and confirm that `provena` is active. Codex documents both the shared `~/.codex/config.toml` file and `/mcp` in its [MCP setup guide](https://developers.openai.com/docs/extend/mcp?surface=cli).
+
+Record and retrieve a memory with prompts such as:
+
+```text
+Using Provena, remember that I am allergic to cheese. Return the event and claim IDs.
+```
+
+Then open a new Codex session and ask:
+
+```text
+Using Provena memory, suggest pizza ideas suitable for me.
+```
+
+To inspect provenance, ask Codex to search Provena for the relevant memory and call `memory_explain` on the returned claim.
+
+### Connect another MCP client
+
+Generate the appropriate configuration and add the printed JSON to that client's MCP configuration:
+
+```bash
+provena connect claude
+provena connect gemini
+provena connect generic
+```
+
+After adding the configuration, restart the client. Provena exposes MCP tools for attributed retrieval, explicit memory capture, candidate claims, and `memory_explain` provenance traces.
+
+## Open the operator console
+
+The pip package installs the CLI and MCP connector. The browser console runs with the Provena service.
+
+If somebody else operates the service, ask them for the console URL, a human reviewer API key, and the scope ID. Use an agent key in Codex and a human key in the console; review actions require the human credential.
+
+For the self-hosted setup above, `provena init` has already exported `PROVENA_HUMAN_KEY` and `PROVENA_SCOPE_ID`. Save them in the console settings in `.env`:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(".env")
+lines = []
+for line in path.read_text().splitlines():
+    if line.startswith("PROVENA_API_KEY="):
+        line = f"PROVENA_API_KEY={os.environ['PROVENA_HUMAN_KEY']}"
+    elif line.startswith("PROVENA_SCOPE_ID="):
+        line = f"PROVENA_SCOPE_ID={os.environ['PROVENA_SCOPE_ID']}"
+    lines.append(line)
+path.write_text("\n".join(lines) + "\n")
+PY
+```
+
+Start the console with the human credential:
+
+```bash
+PROVENA_API_KEY="$PROVENA_HUMAN_KEY" \
+docker compose -f compose.yaml -f compose.ollama.yaml \
+  --profile console up -d console
+```
+
+Open the console at:
+
+```text
+http://127.0.0.1:3000/overview
+```
+
+The API documentation is available at `http://127.0.0.1:8000/docs`. Add `?scope=YOUR_SCOPE_ID` to the console URL to select a scope explicitly.
 
 ## Command roles
 

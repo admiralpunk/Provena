@@ -77,6 +77,10 @@ def main() -> None:
         "releases/latest/download/default.env.example",
         "docker compose -f compose.yaml -f compose.ollama.yaml up -d",
         'eval "$(provena init --format shell)"',
+        "~/.codex/config.toml",
+        "codex mcp list",
+        "--profile console up -d console",
+        "PROVENA_HUMAN_KEY",
     )
     for expected_text in required_pypi_text:
         if expected_text not in pypi_readme:

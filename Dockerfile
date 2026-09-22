@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
-ARG VERSION=0.1.4
+ARG VERSION=0.1.5
 
 LABEL org.opencontainers.image.title="Provena Server" \
       org.opencontainers.image.description="Evidence-backed memory service for AI agents" \

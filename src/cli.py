@@ -25,7 +25,7 @@ def package_version() -> str:
     try:
         return version(PACKAGE_NAME)
     except PackageNotFoundError:
-        return "0.1.4"
+        return "0.1.5"
 
 
 def request_json(
