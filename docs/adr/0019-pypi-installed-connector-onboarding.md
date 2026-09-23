@@ -13,7 +13,7 @@ The generated connector configuration also invoked `uvx`, even when the user had
 
 Use `PYPI.md` as the Python distribution's long description. It documents one connector installation path:
 
-1. install `provena-agent-memory` with pip;
+1. install `provena-agent-memory` as a managed application with pipx;
 2. obtain an API URL, agent credential, and exact scope from an operator, or self-host the released service stack and local Ollama configuration;
 3. verify them with `provena doctor`; and
 4. generate client configuration with `provena connect CLIENT`.
@@ -24,6 +24,10 @@ Keep the repository README as the complete operator and contributor guide. PyPI 
 
 ## Consequences
 
-Package users get one connector installation and execution model, and the generated MCP configuration uses the exact installed environment. They can use an organization-operated service or run the versioned PostgreSQL, API, and Ollama containers themselves. Moving or deleting the Python environment invalidates the generated executable path; users must keep it available or rerun `provena connect` after reinstalling.
+Package users get one connector installation and execution model, and the generated MCP configuration uses the exact pipx-managed environment. They can use an organization-operated service or run the versioned PostgreSQL, API, and Ollama containers themselves. Removing the pipx application invalidates the generated executable path; users must reinstall it and rerun `provena connect`.
 
 The pip package remains a connector and does not bundle PostgreSQL, weaken bootstrap authorization, or collapse the service and connector dependency boundaries established by ADR 0018.
+
+## Amendment: managed application installation
+
+The primary public installation command is `pipx install provena-agent-memory`. pipx owns the isolated Python environment and exposes stable Provena commands on the user's path, so onboarding does not require manual virtual environment creation or activation. Regular pip remains supported for contributors and users who already manage a persistent environment. Ephemeral runners such as `pipx run` and `uvx` are unsuitable for installed lifecycle hooks because their executable paths may disappear between agent sessions.

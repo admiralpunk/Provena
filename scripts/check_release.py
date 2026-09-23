@@ -68,8 +68,8 @@ def main() -> None:
         mismatches.append("PYPI.md is missing the MCP Registry ownership marker")
     if package_readme != "PYPI.md":
         mismatches.append("pyproject must use PYPI.md as the package description")
-    if "python -m pip install provena-agent-memory" not in pypi_readme:
-        mismatches.append("PYPI.md is missing the pip installation workflow")
+    if "pipx install provena-agent-memory" not in pypi_readme:
+        mismatches.append("PYPI.md is missing the managed pipx installation workflow")
     if "https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" not in pypi_readme:
         mismatches.append("PYPI.md is missing the absolute logo URL")
     required_pypi_text = (

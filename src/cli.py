@@ -11,7 +11,6 @@ import sys
 import sysconfig
 import urllib.error
 import urllib.request
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
@@ -22,14 +21,13 @@ from .quickstart import default_state_dir, prepare_release, require_local_tools,
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
-PACKAGE_NAME = "provena-agent-memory"
 
 
 def package_version() -> str:
-    try:
-        return version(PACKAGE_NAME)
-    except PackageNotFoundError:
-        return "0.1.7"
+    # scripts/check_release.py keeps this synchronized with package metadata,
+    # images, deployment files, and release tags. A constant also prevents a
+    # stale source-tree egg-info directory from selecting an older deployment.
+    return "0.1.8"
 
 
 def request_json(
@@ -233,14 +231,48 @@ def _existing_quickstart_connection(api_url: str) -> dict[str, str] | None:
         return None
     try:
         environment = load_connection_environment({}, path)
-        request_json(
+        context = request_json(
             api_url,
-            f"/claims?scope_id={environment['PROVENA_SCOPE_ID']}&limit=1",
+            f"/operator/context?scope_id={environment['PROVENA_SCOPE_ID']}",
             headers={"X-API-Key": environment["PROVENA_API_KEY"]},
         )
-        return environment
+        return {**environment, "PROVENA_ORG_ID": str(context["organization"]["id"])}
     except (KeyError, RuntimeError):
         return None
+
+
+def _ensure_console_reviewer(
+    api_url: str,
+    state_dir: Path,
+    deployment: dict[str, str],
+    agent_connection: dict[str, str],
+) -> None:
+    scope_id = agent_connection["PROVENA_SCOPE_ID"]
+    current_key = deployment.get("PROVENA_API_KEY")
+    current_scope = deployment.get("PROVENA_SCOPE_ID")
+    if current_key and current_scope == scope_id:
+        try:
+            context = request_json(
+                api_url,
+                f"/operator/context?scope_id={scope_id}",
+                headers={"X-API-Key": current_key},
+            )
+            if context["principal"]["role"] == "human":
+                return
+        except (KeyError, RuntimeError):
+            pass
+
+    reviewer = request_json(
+        api_url,
+        f"/organizations/{agent_connection['PROVENA_ORG_ID']}/credentials",
+        method="POST",
+        body={"role": "human", "label": "local reviewer"},
+        headers={"X-Bootstrap-Token": deployment["BOOTSTRAP_TOKEN"]},
+    )
+    update_env(
+        state_dir / ".env",
+        {"PROVENA_API_KEY": str(reviewer["api_key"]), "PROVENA_SCOPE_ID": scope_id},
+    )
 
 
 def _quickstart_command(args: argparse.Namespace) -> int:
@@ -257,6 +289,7 @@ def _quickstart_command(args: argparse.Namespace) -> int:
     if existing:
         agent_key = existing["PROVENA_API_KEY"]
         scope_id = existing["PROVENA_SCOPE_ID"]
+        _ensure_console_reviewer(api_url, state_dir, deployment, existing)
         print("Reusing the existing Provena agent credential and scope.")
     else:
         workspace = bootstrap_workspace(

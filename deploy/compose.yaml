@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/admiralpunk/provena-server:${PROVENA_VERSION:-0.1.7}
+    image: ghcr.io/admiralpunk/provena-server:${PROVENA_VERSION:-0.1.8}
     environment:
       DATABASE_URL: postgresql+psycopg://provena:${POSTGRES_PASSWORD}@postgres:5432/provena
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set BOOTSTRAP_TOKEN in .env}
@@ -36,7 +36,7 @@ services:
 
   console:
     profiles: ["console"]
-    image: ghcr.io/admiralpunk/provena-console:${PROVENA_VERSION:-0.1.7}
+    image: ghcr.io/admiralpunk/provena-console:${PROVENA_VERSION:-0.1.8}
     environment:
       PROVENA_API_URL: http://api:8000
       PROVENA_API_KEY: ${PROVENA_API_KEY:-}

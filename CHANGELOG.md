@@ -4,6 +4,17 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-23
+
+### Changed
+
+- Make `pipx install provena-agent-memory` the primary installation path so users do not manage or activate a Python environment.
+
+### Fixed
+
+- Prevent stale exported shell variables from overriding the quickstart deployment's image version, console credential, or scope.
+- Validate the persisted console reviewer credential and replace it when a reused Codex connection belongs to the current workspace but the reviewer key is missing, invalid, or not a human credential.
+
 ## [0.1.7] - 2026-09-23
 
 ### Added
@@ -71,7 +82,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/admiralpunk/Provena/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/admiralpunk/Provena/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/admiralpunk/Provena/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/admiralpunk/Provena/compare/v0.1.4...v0.1.5

@@ -99,6 +99,19 @@ def compose_command(state_dir: Path, *, ollama: bool = False) -> list[str]:
     return command
 
 
+def compose_environment(state_dir: Path, environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return a Compose environment where the managed state file wins.
+
+    Docker Compose gives exported shell variables precedence over ``.env``.
+    Quickstart owns the deployment in ``state_dir``, so stale variables from a
+    previous manual setup must not silently select another image, credential,
+    or scope.
+    """
+    values = dict(environ or os.environ)
+    values.update(read_env(state_dir / ".env"))
+    return values
+
+
 def require_local_tools(client: str) -> None:
     missing = [name for name in ("docker", client) if not shutil.which(name)]
     if missing:
@@ -129,7 +142,8 @@ def start_core(
     runner: Runner = subprocess.run,
 ) -> None:
     command = compose_command(state_dir)
-    runner([*command, "up", "-d", "postgres", "api"], cwd=state_dir, check=True)
+    process_environment = compose_environment(state_dir)
+    runner([*command, "up", "-d", "postgres", "api"], cwd=state_dir, env=process_environment, check=True)
     try:
         wait_until_ready("http://127.0.0.1:8000")
         return
@@ -137,6 +151,7 @@ def start_core(
         logs = runner(
             [*command, "logs", "--no-color", "--tail=80", "api"],
             cwd=state_dir,
+            env=process_environment,
             text=True,
             capture_output=True,
             check=False,
@@ -149,11 +164,12 @@ def start_core(
     runner(
         [*command, "exec", "-T", "-e", f"NEW_PASSWORD={password}", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-U", "provena", "-d", "provena"],
         cwd=state_dir,
+        env=process_environment,
         input=sql,
         text=True,
         check=True,
     )
-    runner([*command, "restart", "api"], cwd=state_dir, check=True)
+    runner([*command, "restart", "api"], cwd=state_dir, env=process_environment, check=True)
     wait_until_ready("http://127.0.0.1:8000")
 
 
@@ -163,4 +179,9 @@ def start_automatic_memory_and_console(
     runner: Runner = subprocess.run,
 ) -> None:
     command = compose_command(state_dir, ollama=True)
-    runner([*command, "--profile", "console", "up", "-d"], cwd=state_dir, check=True)
+    runner(
+        [*command, "--profile", "console", "up", "-d"],
+        cwd=state_dir,
+        env=compose_environment(state_dir),
+        check=True,
+    )

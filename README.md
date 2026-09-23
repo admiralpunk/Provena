@@ -107,12 +107,14 @@ Model output never raises source authority or activates a claim. Candidate claim
 
 ### Fastest self-hosted setup
 
-Install the published connector and run the one-command local setup:
+Install the published connector with `pipx`, which manages Provena in its own environment and exposes the command globally. You do not need to create or activate a virtual environment:
 
 ```bash
-python -m pip install provena-agent-memory
+pipx install provena-agent-memory
 provena quickstart codex
 ```
+
+If `pipx` is not installed, follow the [official pipx installation instructions](https://pipx.pypa.io/latest/how-to/install-pipx.html). A regular `pip install` remains supported when you already have a persistent Python environment.
 
 This prepares the version-matched Compose deployment, preserves an existing database and `.env`, starts PostgreSQL and local Ollama models, bootstraps separate agent and reviewer credentials, installs Codex MCP and lifecycle hooks, and starts the operator console. Restart Codex, open `/hooks`, and trust the Provena hooks. The command prints the scope-specific console URL.
 
@@ -124,9 +126,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.7/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.7/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.7/default.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.8/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.8/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.8/default.env.example
 cp .env.example .env
 ```
 
@@ -284,15 +286,14 @@ PostgreSQL and Ollama use named volumes. Add `docker compose --profile console d
 
 ## Connect an AI Agent
 
-Install the published connector in a persistent Python environment. For an existing Provena service, configure Codex MCP plus automatic capture and retrieval using the **agent** credential and one exact scope:
+For an existing Provena service, install the connector as a managed command and configure Codex MCP plus automatic capture and retrieval using the **agent** credential and one exact scope:
 
 ```bash
-python3 -m venv ~/.venvs/provena
-~/.venvs/provena/bin/pip install provena-agent-memory
+pipx install provena-agent-memory
 export PROVENA_API_URL=http://127.0.0.1:8000
 export PROVENA_API_KEY=paste-agent-key
 export PROVENA_SCOPE_ID=paste-project-or-branch-scope-id
-~/.venvs/provena/bin/provena connect codex --install
+provena connect codex --install
 ```
 
 Restart Codex and use `/hooks` to review and trust the installed lifecycle hooks. Use `provena connect codex` without `--install` to print configuration without changing Codex. Use `claude`, `gemini`, or `generic` instead of `codex` to print the corresponding JSON configuration for another client. The printed MCP command uses:

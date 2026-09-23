@@ -15,10 +15,10 @@ Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shar
 
 ## Get started
 
-You need Python 3.11 or newer, Docker Engine with Docker Compose, and Codex. Install Provena, then run the local quickstart:
+You need Python 3.11 or newer, [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html), Docker Engine with Docker Compose, and Codex. `pipx` manages Provena in its own environment, so you do not create or activate one:
 
 ```bash
-python -m pip install provena-agent-memory
+pipx install provena-agent-memory
 provena quickstart codex
 ```
 
@@ -39,7 +39,7 @@ provena connect codex --install
 
 This validates the service, installs the MCP connection, and merges the automatic hooks into Codex while preserving unrelated hooks. Restart Codex and approve them through `/hooks`.
 
-`pip install` does not silently modify Codex or begin recording conversations. Running `quickstart` or `connect --install` is the explicit opt-in; automatic memory becomes the default after that point.
+Package installation does not silently modify Codex or begin recording conversations. Running `quickstart` or `connect --install` is the explicit opt-in; automatic memory becomes the default after that point.
 
 ## Manual service setup
 
@@ -124,7 +124,7 @@ Verify the service, credential, and scope:
 provena doctor
 ```
 
-The generated client configuration points to the `provena-mcp` executable installed by pip, so keep that Python environment available to the agent client.
+The generated client configuration points to the stable `provena-mcp` executable managed by pipx. If you used regular pip, keep that environment available to the agent client.
 
 ### Connect Codex
 
