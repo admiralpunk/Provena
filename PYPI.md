@@ -16,13 +16,13 @@ Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shar
 ## Product Demo
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4">
+  <a href="https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4">
     <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg" width="800" alt="Watch the Provena product demo">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4"><strong>▶ Watch the 90-second product demo</strong></a>
+  <a href="https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4"><strong>▶ Watch the 90-second product demo</strong></a>
 </p>
 
 ## Get started

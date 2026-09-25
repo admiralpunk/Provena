@@ -4,6 +4,12 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-09-25
+
+### Fixed
+
+- Serve the product demo through a browser-streamable `video/mp4` URL from the repository-backed CDN.
+
 ## [0.1.9] - 2026-09-25
 
 ### Added
@@ -88,7 +94,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/admiralpunk/Provena/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/admiralpunk/Provena/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/admiralpunk/Provena/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/admiralpunk/Provena/compare/v0.1.6...v0.1.7

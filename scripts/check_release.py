@@ -78,7 +78,7 @@ def main() -> None:
         if not path.is_file() or path.stat().st_size == 0:
             mismatches.append(f"missing product demo asset: {path.relative_to(ROOT)}")
     demo_urls = (
-        "https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4",
+        "https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4",
         "https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg",
     )
     for url in demo_urls:
