@@ -4,6 +4,10 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+### Changed
+
+- Render the product demo as GitHub's native audio-enabled player while retaining the browser-streaming demo link on PyPI.
+
 ## [0.1.10] - 2026-09-25
 
 ### Fixed
