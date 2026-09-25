@@ -4,6 +4,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-09-25
+
 ### Changed
 
 - Render the product demo as GitHub's native audio-enabled player while retaining the browser-streaming demo link on PyPI.
@@ -103,7 +105,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/admiralpunk/Provena/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/admiralpunk/Provena/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/admiralpunk/Provena/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/admiralpunk/Provena/compare/v0.1.7...v0.1.8
