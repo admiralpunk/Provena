@@ -4,6 +4,12 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-25
+
+### Added
+
+- Add a repository-hosted 90-second product demo with a lightweight poster preview to the GitHub and PyPI project descriptions.
+
 ## [0.1.8] - 2026-09-23
 
 ### Changed
@@ -82,7 +88,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/admiralpunk/Provena/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/admiralpunk/Provena/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/admiralpunk/Provena/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/admiralpunk/Provena/compare/v0.1.5...v0.1.6

@@ -28,6 +28,8 @@ def main() -> None:
     deploy_env = (ROOT / "deploy/.env.example").read_text()
     readme = (ROOT / "README.md").read_text()
     pypi_readme = (ROOT / "PYPI.md").read_text()
+    demo_video = ROOT / "docs/assets/provena-product-demo.mp4"
+    demo_poster = ROOT / "docs/assets/provena-product-demo.jpg"
 
     expected = {
         "frontend/package.json": frontend_version,
@@ -72,6 +74,18 @@ def main() -> None:
         mismatches.append("PYPI.md is missing the managed pipx installation workflow")
     if "https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" not in pypi_readme:
         mismatches.append("PYPI.md is missing the absolute logo URL")
+    for path in (demo_video, demo_poster):
+        if not path.is_file() or path.stat().st_size == 0:
+            mismatches.append(f"missing product demo asset: {path.relative_to(ROOT)}")
+    demo_urls = (
+        "https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4",
+        "https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg",
+    )
+    for url in demo_urls:
+        if url not in readme:
+            mismatches.append(f"README.md is missing product demo URL: {url}")
+        if url not in pypi_readme:
+            mismatches.append(f"PYPI.md is missing product demo URL: {url}")
     required_pypi_text = (
         "Ask your Provena operator for these three values:",
         "releases/latest/download/default.env.example",

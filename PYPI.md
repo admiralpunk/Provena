@@ -13,6 +13,18 @@
 
 Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shared memory service. Every structured claim retains evidence pointing to its immutable source event, along with scope, authority, review state, validity time, conflicts, and retrieval history.
 
+## Product Demo
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4">
+    <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg" width="800" alt="Watch the Provena product demo">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4"><strong>▶ Watch the 90-second product demo</strong></a>
+</p>
+
 ## Get started
 
 You need Python 3.11 or newer, [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html), Docker Engine with Docker Compose, and Codex. `pipx` manages Provena in its own environment, so you do not create or activate one:

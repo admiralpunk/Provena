@@ -10,7 +10,7 @@ COPY . .
 RUN npm run build
 
 FROM node:22-alpine AS runner
-ARG VERSION=0.1.8
+ARG VERSION=0.1.9
 LABEL org.opencontainers.image.title="Provena Console" \
       org.opencontainers.image.description="Operator console for evidence-backed agent memory" \
       org.opencontainers.image.source="https://github.com/admiralpunk/Provena" \

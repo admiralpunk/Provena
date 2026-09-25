@@ -22,9 +22,9 @@ def test_prepare_release_preserves_initialized_environment(monkeypatch, tmp_path
         destination.write_text("services: {}\n")
 
     monkeypatch.setattr("provena.quickstart._download", download)
-    values = prepare_release("0.1.8", tmp_path)
+    values = prepare_release("0.1.9", tmp_path)
 
-    assert values["PROVENA_VERSION"] == "0.1.8"
+    assert values["PROVENA_VERSION"] == "0.1.9"
     assert values["POSTGRES_PASSWORD"] == "existing-db-password"
     assert values["BOOTSTRAP_TOKEN"] == "existing-bootstrap"
     assert values["PROVENA_API_KEY"] == "human-key"
@@ -36,7 +36,7 @@ def test_prepare_release_generates_separate_new_secrets(monkeypatch, tmp_path):
         destination.write_text(TEMPLATE if destination.name == ".env" else "services: {}\n")
 
     monkeypatch.setattr("provena.quickstart._download", download)
-    values = prepare_release("0.1.8", tmp_path)
+    values = prepare_release("0.1.9", tmp_path)
 
     assert values["POSTGRES_PASSWORD"] != values["BOOTSTRAP_TOKEN"]
     assert not values["POSTGRES_PASSWORD"].startswith("replace-with-")
@@ -46,7 +46,7 @@ def test_prepare_release_generates_separate_new_secrets(monkeypatch, tmp_path):
 
 def test_compose_environment_uses_managed_values_over_stale_shell(tmp_path):
     (tmp_path / ".env").write_text(
-        "PROVENA_VERSION=0.1.8\nPROVENA_API_KEY=current-key\nPROVENA_SCOPE_ID=current-scope\n"
+        "PROVENA_VERSION=0.1.9\nPROVENA_API_KEY=current-key\nPROVENA_SCOPE_ID=current-scope\n"
     )
 
     environment = compose_environment(
@@ -60,13 +60,13 @@ def test_compose_environment_uses_managed_values_over_stale_shell(tmp_path):
     )
 
     assert environment["PATH"] == "/bin"
-    assert environment["PROVENA_VERSION"] == "0.1.8"
+    assert environment["PROVENA_VERSION"] == "0.1.9"
     assert environment["PROVENA_API_KEY"] == "current-key"
     assert environment["PROVENA_SCOPE_ID"] == "current-scope"
 
 
 def test_start_core_passes_managed_environment_to_compose(monkeypatch, tmp_path):
-    (tmp_path / ".env").write_text("PROVENA_VERSION=0.1.8\nPOSTGRES_PASSWORD=db-secret\n")
+    (tmp_path / ".env").write_text("PROVENA_VERSION=0.1.9\nPOSTGRES_PASSWORD=db-secret\n")
     calls = []
     monkeypatch.setenv("PROVENA_VERSION", "0.1.5")
     monkeypatch.setattr("provena.quickstart.wait_until_ready", lambda api_url: None)
@@ -76,7 +76,7 @@ def test_start_core_passes_managed_environment_to_compose(monkeypatch, tmp_path)
 
     start_core(tmp_path, {"POSTGRES_PASSWORD": "db-secret"}, runner=runner)
 
-    assert calls[0][1]["env"]["PROVENA_VERSION"] == "0.1.8"
+    assert calls[0][1]["env"]["PROVENA_VERSION"] == "0.1.9"
 
 
 def test_start_console_passes_managed_credentials_to_compose(monkeypatch, tmp_path):

@@ -17,9 +17,15 @@ The result is agent context that can be inspected, challenged, scoped, and expla
 
 ## Product Demo
 
-> **Loom walkthrough coming soon.**
->
-> Replace this block with a linked Loom thumbnail or embedded preview. The surrounding section is intentionally ready for the final demo asset.
+<p align="center">
+  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4">
+    <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg" width="800" alt="Watch the Provena product demo">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.mp4"><strong>▶ Watch the 90-second product demo</strong></a>
+</p>
 
 ## What is Provena?
 
@@ -126,9 +132,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.8/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.8/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.8/default.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.9/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.9/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.9/default.env.example
 cp .env.example .env
 ```
 
