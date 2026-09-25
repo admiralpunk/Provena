@@ -1,7 +1,4 @@
 
-
-https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/frontend/public/logo.svg" width="96" height="96" alt="Provena logo">
 </p>
@@ -21,15 +18,7 @@ The result is agent context that can be inspected, challenged, scoped, and expla
 
 ## Product Demo
 
-<p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4">
-    <img src="https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg" width="800" alt="Watch the Provena product demo">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4"><strong>▶ Watch the 90-second product demo</strong></a>
-</p>
+https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b
 
 ## What is Provena?
 
