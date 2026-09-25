@@ -18,7 +18,21 @@ The result is agent context that can be inspected, challenged, scoped, and expla
 
 ## Product Demo
 
+<div align="center">
+
+**See evidence-backed agent memory in action.**
+
+*A 90-second walkthrough of setup, cross-session recall, and the Provena operator console.*
+
+</div>
+
 https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b
+
+<p align="center">
+  <a href="#getting-started"><strong>Try Provena →</strong></a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="#how-provena-works">See how it works</a>
+</p>
 
 ## What is Provena?
 
