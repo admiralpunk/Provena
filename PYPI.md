@@ -27,16 +27,18 @@ Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shar
 
 ## Get started
 
-You need Python 3.11 or newer, [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html), Docker Engine with Docker Compose, and Codex. `pipx` manages Provena in its own environment, so you do not create or activate one:
+You need Python 3.11 or newer, [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html), Docker Engine with Docker Compose, and at least one supported host: Codex, Claude Code, or Gemini CLI. `pipx` manages Provena in its own environment, so you do not create or activate one. Choose your host:
 
 ```bash
 pipx install provena-agent-memory
 provena quickstart codex
+# Or: provena quickstart claude
+# Or: provena quickstart gemini
 ```
 
-The quickstart downloads the matching deployment files, preserves an existing local database, starts PostgreSQL and local Ollama models, creates separate agent and reviewer credentials, connects Codex, enables automatic memory capture and retrieval, and starts the browser console. The first run can take several minutes while Ollama downloads the models.
+The quickstart downloads the matching deployment files, preserves an existing local database, starts PostgreSQL and local Ollama models, creates separate agent and reviewer credentials, configures the selected host, enables automatic memory capture and retrieval, and starts the browser console. The first run can take several minutes while Ollama downloads the models.
 
-Restart Codex, enter `/hooks`, and trust the Provena hooks. You can then use Codex normally: prompts and final responses are captured as immutable evidence, candidate facts are extracted, and relevant claims are added to later turns without requiring you to mention Provena. The command prints the exact console URL when setup completes.
+Restart the selected host and review Provena under `/hooks` and `/mcp`. You can then use the agent normally: prompts and final responses are captured as immutable evidence, candidate facts are extracted, and relevant claims are added to later turns without requiring you to mention Provena. The command prints the exact console URL when setup completes.
 
 ### Connect to an existing Provena service
 
@@ -47,11 +49,13 @@ export PROVENA_API_URL="https://memory.example.com"
 export PROVENA_API_KEY="paste-agent-key"
 export PROVENA_SCOPE_ID="paste-scope-id"
 provena connect codex --install
+# Or: provena connect claude --install
+# Or: provena connect gemini --install
 ```
 
-This validates the service, installs the MCP connection, and merges the automatic hooks into Codex while preserving unrelated hooks. Restart Codex and approve them through `/hooks`.
+This validates the service, installs the MCP connection, and merges the automatic hooks into the selected host while preserving unrelated MCP servers, hooks, and settings. Restart the host and review the integration through `/hooks` and `/mcp`.
 
-Package installation does not silently modify Codex or begin recording conversations. Running `quickstart` or `connect --install` is the explicit opt-in; automatic memory becomes the default after that point.
+Package installation does not silently modify an agent host or begin recording conversations. Running `quickstart` or `connect --install` is the explicit opt-in; automatic memory becomes the default after that point.
 
 ## Manual service setup
 
@@ -192,6 +196,17 @@ Suggest pizza ideas for me.
 
 To inspect provenance, ask Codex to search Provena for the relevant memory and call `memory_explain` on the returned claim.
 
+### Connect Claude Code or Gemini CLI
+
+The same one-step installer configures user-scoped MCP plus native lifecycle hooks:
+
+```bash
+provena connect claude --install
+provena connect gemini --install
+```
+
+Run only the command for the host you use. Restart it, then review Provena under `/hooks` and `/mcp`. Claude Code stores hooks in `~/.claude/settings.json` and its user MCP entry in `~/.claude.json`. Gemini CLI stores both in `~/.gemini/settings.json`. Each host receives a separate mode `0600` Provena connection file, so its API key is not duplicated in hook or MCP configuration.
+
 ### Connect another MCP client
 
 Generate the appropriate configuration and add the printed JSON to that client's MCP configuration:
@@ -269,9 +284,11 @@ This changes only the PostgreSQL login credential. It preserves events, claims, 
 
 | Command | Purpose |
 | --- | --- |
-| `provena quickstart codex` | Start a complete local stack, configure Codex, enable automatic memory, and start the console. |
+| `provena quickstart codex` | Start a complete local stack and configure Codex. |
+| `provena quickstart claude` | Start a complete local stack and configure Claude Code. |
+| `provena quickstart gemini` | Start a complete local stack and configure Gemini CLI. |
 | `provena doctor` | Verify API, database, credential, and scope access. |
-| `provena connect codex --install` | Install MCP plus automatic capture and retrieval for an existing service. |
+| `provena connect HOST --install` | Install MCP plus automatic capture and retrieval for Codex, Claude Code, or Gemini CLI. |
 | `provena connect CLIENT` | Print MCP configuration without changing the client. |
 | `provena status` | Check service health without authenticating. |
 | `provena init` | Bootstrap a running self-hosted service; requires `BOOTSTRAP_TOKEN`. |
