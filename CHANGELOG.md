@@ -8,6 +8,11 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 - Render the product demo as GitHub's native audio-enabled player while retaining the browser-streaming demo link on PyPI.
 
+### Added
+
+- Add `provena quickstart claude` and `provena quickstart gemini` with automatic user-scoped MCP, conversation capture, and attributed context retrieval.
+- Support `provena connect claude --install` and `provena connect gemini --install` for existing Provena services.
+
 ## [0.1.10] - 2026-09-25
 
 ### Fixed

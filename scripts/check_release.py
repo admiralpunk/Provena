@@ -100,7 +100,11 @@ def main() -> None:
         "Recover from a database password mismatch",
         "ALTER ROLE provena WITH PASSWORD",
         "provena quickstart codex",
+        "provena quickstart claude",
+        "provena quickstart gemini",
         "provena connect codex --install",
+        "provena connect claude --install",
+        "provena connect gemini --install",
         "without requiring you to mention Provena",
     )
     for expected_text in required_pypi_text:

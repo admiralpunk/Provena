@@ -21,4 +21,4 @@ Host and model names never change source authority. Agent-mediated user text and
 
 Clients with supported hooks receive automatic context and capture. Other MCP clients can call the portable tools explicitly. A host that neither runs hooks nor follows MCP server instructions cannot be forced by Provena to capture or retrieve turns. Session identity is durable and attributable without creating separate claim stores per model.
 
-ADR 0020 adds a packaged Codex installer and local quickstart while retaining these model-agnostic MCP, REST, and lifecycle boundaries.
+ADR 0020 adds packaged onboarding, and ADR 0021 extends its user-scoped installer to Codex, Claude Code, and Gemini CLI while retaining these model-agnostic MCP, REST, and lifecycle boundaries.

@@ -120,18 +120,20 @@ Model output never raises source authority or activates a claim. Candidate claim
 
 ### Fastest self-hosted setup
 
-Install the published connector with `pipx`, which manages Provena in its own environment and exposes the command globally. You do not need to create or activate a virtual environment:
+Install the published connector with `pipx`, which manages Provena in its own environment and exposes the command globally. You do not need to create or activate a virtual environment. Choose the agent host you use:
 
 ```bash
 pipx install provena-agent-memory
 provena quickstart codex
+# Or: provena quickstart claude
+# Or: provena quickstart gemini
 ```
 
 If `pipx` is not installed, follow the [official pipx installation instructions](https://pipx.pypa.io/latest/how-to/install-pipx.html). A regular `pip install` remains supported when you already have a persistent Python environment.
 
-This prepares the version-matched Compose deployment, preserves an existing database and `.env`, starts PostgreSQL and local Ollama models, bootstraps separate agent and reviewer credentials, installs Codex MCP and lifecycle hooks, and starts the operator console. Restart Codex, open `/hooks`, and trust the Provena hooks. The command prints the scope-specific console URL.
+This prepares the version-matched Compose deployment, preserves an existing database and `.env`, starts PostgreSQL and local Ollama models, bootstraps separate agent and reviewer credentials, installs MCP and lifecycle hooks for the selected host, and starts the operator console. The command prints the scope-specific console URL.
 
-After this explicit setup, ordinary prompts and final responses are captured automatically and relevant candidate or reviewed claims are supplied to later Codex turns. `pip install` alone never edits Codex configuration or begins capture. See [ADR 0020](docs/adr/0020-one-command-local-onboarding-and-default-host-memory.md).
+After this explicit setup, ordinary prompts and final responses are captured automatically and relevant candidate or reviewed claims are supplied to later turns. Restart the selected host and review Provena under `/hooks` and `/mcp`. `pip install` alone never edits an agent's configuration or begins capture. See [ADR 0020](docs/adr/0020-one-command-local-onboarding-and-default-host-memory.md) and [ADR 0021](docs/adr/0021-user-scoped-agent-host-installers.md).
 
 ### Manual self-hosted release setup
 
@@ -299,7 +301,7 @@ PostgreSQL and Ollama use named volumes. Add `docker compose --profile console d
 
 ## Connect an AI Agent
 
-For an existing Provena service, install the connector as a managed command and configure Codex MCP plus automatic capture and retrieval using the **agent** credential and one exact scope:
+For an existing Provena service, install the connector as a managed command and configure MCP plus automatic capture and retrieval using the **agent** credential and one exact scope. Replace `codex` with `claude` or `gemini` for that host:
 
 ```bash
 pipx install provena-agent-memory
@@ -309,7 +311,7 @@ export PROVENA_SCOPE_ID=paste-project-or-branch-scope-id
 provena connect codex --install
 ```
 
-Restart Codex and use `/hooks` to review and trust the installed lifecycle hooks. Use `provena connect codex` without `--install` to print configuration without changing Codex. Use `claude`, `gemini`, or `generic` instead of `codex` to print the corresponding JSON configuration for another client. The printed MCP command uses:
+Restart the selected host and review the installed integration under `/hooks` and `/mcp`. Use `provena connect <host>` without `--install` to print configuration without changing the host. Use `generic` to print standard MCP JSON for another client. The printed MCP command uses:
 
 ```json
 {
