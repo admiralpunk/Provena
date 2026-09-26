@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/admiralpunk/Provena/security/advisories/new
+    about: Report vulnerabilities and tenant-isolation failures privately.
+  - name: Contributor guide
+    url: https://github.com/admiralpunk/Provena/blob/master/CONTRIBUTING.md
+    about: Read the setup, testing, and pull-request workflow before contributing.

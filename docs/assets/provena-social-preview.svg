@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Provena social preview</title>
+  <desc id="description">Provena, evidence-backed memory for AI agents. Know what your agent remembers and why.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.58" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#10253c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="72%" cy="44%" r="48%">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#020617" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <path d="M0 584 C280 500 490 690 770 574 C980 488 1112 510 1280 438 V640 H0Z" fill="#38bdf8" opacity="0.035"/>
+
+  <g transform="translate(86 76)" filter="url(#shadow)">
+    <rect width="112" height="112" rx="24" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+    <path d="M24 31h40a18 18 0 0 1 0 36H24V31z" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 67v18" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="64" cy="49" r="7" fill="#38bdf8"/>
+    <path d="M64 56v28" stroke="#10b981" stroke-width="7" stroke-linecap="round" stroke-dasharray="7 8"/>
+    <circle cx="64" cy="85" r="7" fill="#10b981"/>
+  </g>
+
+  <g font-family="Inter, DejaVu Sans, sans-serif">
+    <text x="226" y="129" fill="#f8fafc" font-size="64" font-weight="760" letter-spacing="5">PROVENA</text>
+    <text x="228" y="169" fill="#38bdf8" font-size="22" font-weight="600" letter-spacing="1.4">EVIDENCE-BACKED MEMORY FOR AI AGENTS</text>
+
+    <text x="86" y="300" fill="#f8fafc" font-size="48" font-weight="680">Know what your agent</text>
+    <text x="86" y="360" fill="#f8fafc" font-size="48" font-weight="680">remembers — and why.</text>
+    <text x="88" y="414" fill="#94a3b8" font-size="23" font-weight="420">Persistent claims with immutable evidence, scope,</text>
+    <text x="88" y="448" fill="#94a3b8" font-size="23" font-weight="420">authority, conflicts, review, and retrieval history.</text>
+
+    <g transform="translate(86 508)" font-size="17" font-weight="600">
+      <rect width="188" height="46" rx="23" fill="#38bdf8" opacity="0.12" stroke="#38bdf8" stroke-opacity="0.42"/>
+      <circle cx="24" cy="23" r="5" fill="#38bdf8"/>
+      <text x="40" y="29" fill="#bae6fd">Immutable evidence</text>
+
+      <g transform="translate(204)">
+        <rect width="166" height="46" rx="23" fill="#10b981" opacity="0.11" stroke="#10b981" stroke-opacity="0.42"/>
+        <circle cx="24" cy="23" r="5" fill="#10b981"/>
+        <text x="40" y="29" fill="#a7f3d0">Scoped claims</text>
+      </g>
+
+      <g transform="translate(386)">
+        <rect width="190" height="46" rx="23" fill="#a78bfa" opacity="0.11" stroke="#a78bfa" stroke-opacity="0.42"/>
+        <circle cx="24" cy="23" r="5" fill="#a78bfa"/>
+        <text x="40" y="29" fill="#ddd6fe">Auditable retrieval</text>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(844 164)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M60 86L198 38L310 130L256 274L116 300L32 204Z" stroke="#334155" stroke-width="3"/>
+    <path d="M60 86L256 274M198 38L116 300M310 130L32 204" stroke="#334155" stroke-width="2" stroke-dasharray="6 11"/>
+    <circle cx="60" cy="86" r="20" fill="#0f172a" stroke="#38bdf8" stroke-width="5"/>
+    <circle cx="198" cy="38" r="14" fill="#38bdf8"/>
+    <circle cx="310" cy="130" r="18" fill="#0f172a" stroke="#10b981" stroke-width="5"/>
+    <circle cx="256" cy="274" r="14" fill="#10b981"/>
+    <circle cx="116" cy="300" r="18" fill="#0f172a" stroke="#a78bfa" stroke-width="5"/>
+    <circle cx="32" cy="204" r="12" fill="#a78bfa"/>
+    <circle cx="170" cy="171" r="45" fill="#0f172a" stroke="#475569" stroke-width="3"/>
+    <path d="M148 157h30a14 14 0 0 1 0 28h-30v-28z" stroke="#38bdf8" stroke-width="5"/>
+    <path d="M148 185v13" stroke="#38bdf8" stroke-width="5"/>
+    <circle cx="178" cy="171" r="5" fill="#38bdf8" stroke="none"/>
+    <path d="M178 176v22" stroke="#10b981" stroke-width="4" stroke-dasharray="4 5"/>
+    <circle cx="178" cy="198" r="5" fill="#10b981" stroke="none"/>
+  </g>
+
+  <text x="1194" y="588" text-anchor="end" fill="#64748b" font-family="JetBrains Mono, DejaVu Sans Mono, monospace" font-size="17">github.com/admiralpunk/Provena</text>
+</svg>

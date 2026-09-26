@@ -32,7 +32,22 @@ https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b
   <a href="#getting-started"><strong>Try Provena →</strong></a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="#how-provena-works">See how it works</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="#contributors-wanted">Contribute</a>
 </p>
+
+## Contributors Wanted
+
+Provena is looking for early contributors interested in Python, TypeScript, MCP, PostgreSQL, agent security, technical writing, and developer tooling.
+
+Start with the [open `good first issue` list](https://github.com/admiralpunk/Provena/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22). Each beginner task includes its expected skills, estimated effort, likely files, acceptance criteria, and verification commands. Comment on an issue before starting so contributors do not duplicate work.
+
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and pull-request expectations.
+- Read [AGENTS.md](AGENTS.md) before changing provenance, trust, scope, or database behavior.
+- Use [GitHub Issues](https://github.com/admiralpunk/Provena/issues) for confirmed bugs and scoped changes.
+- Report vulnerabilities privately through the repository Security tab as described in [SECURITY.md](SECURITY.md).
+
+Documentation, tests, accessibility improvements, reproducible bug reports, and focused code changes are all useful contributions.
 
 ## What is Provena?
 
@@ -424,6 +439,6 @@ Raw event payloads, claims, evidence, actions, extraction metadata, embeddings, 
 
 ## Contributing
 
-Keep changes small and preserve the evidence and tenant-boundary invariants. Use Alembic for schema changes, add real PostgreSQL coverage for database guarantees, and record durable architecture decisions in `docs/adr/`. Run the backend tests, frontend type check, and production build before opening a change.
+Choose an [open beginner task](https://github.com/admiralpunk/Provena/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22), comment that you are working on it, and keep the pull request focused on that issue. Preserve the evidence and tenant-boundary invariants, use Alembic for schema changes, add real PostgreSQL coverage for database guarantees, and record durable architecture decisions in `docs/adr/`.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow, [SECURITY.md](SECURITY.md) for private vulnerability reporting, and [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification commands, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, [SECURITY.md](SECURITY.md) for private vulnerability reporting, and [CHANGELOG.md](CHANGELOG.md) for release history.
