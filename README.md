@@ -26,7 +26,7 @@ The result is agent context that can be inspected, challenged, scoped, and expla
 
 </div>
 
-https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b
+https://github.com/user-attachments/assets/37fe219c-b678-4c6d-811d-bfdd37552628
 
 <p align="center">
   <a href="#getting-started"><strong>Try Provena →</strong></a>
