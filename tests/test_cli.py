@@ -4,7 +4,16 @@ import pytest
 from argparse import Namespace
 from uuid import uuid4
 
-from provena.cli import _connect_command, _ensure_console_reviewer, _existing_quickstart_connection, _quickstart_command, build_client_config, installed_mcp_command, render_values
+from provena.cli import (
+    _connect_command,
+    _ensure_console_reviewer,
+    _existing_quickstart_connection,
+    _quickstart_command,
+    build_client_config,
+    installed_command,
+    installed_mcp_command,
+    render_values,
+)
 
 
 def test_installed_connector_prefers_current_python_environment(monkeypatch, tmp_path):
@@ -14,6 +23,38 @@ def test_installed_connector_prefers_current_python_environment(monkeypatch, tmp
     monkeypatch.setattr("provena.cli.shutil.which", lambda name: "/wrong/environment/provena-mcp")
 
     assert installed_mcp_command() == str(connector.resolve())
+
+
+def test_installed_command_accepts_windows_executable_in_current_environment(monkeypatch, tmp_path):
+    connector = tmp_path / "provena-mcp.exe"
+    connector.touch()
+    monkeypatch.setattr("provena.cli.sysconfig.get_path", lambda name: str(tmp_path))
+    monkeypatch.setattr("provena.cli.shutil.which", lambda name: None)
+
+    assert installed_command("provena-mcp") == str(connector.resolve())
+
+
+def test_installed_command_falls_back_to_path(monkeypatch, tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    path_connector = tmp_path / "path" / "provena-mcp"
+    path_connector.parent.mkdir()
+    path_connector.touch()
+    monkeypatch.setattr("provena.cli.sysconfig.get_path", lambda name: str(scripts))
+    monkeypatch.setattr("provena.cli.shutil.which", lambda name: str(path_connector))
+
+    assert installed_command("provena-mcp") == str(path_connector.resolve())
+
+
+def test_installed_command_reports_missing_command(monkeypatch, tmp_path):
+    monkeypatch.setattr("provena.cli.sysconfig.get_path", lambda name: str(tmp_path))
+    monkeypatch.setattr("provena.cli.shutil.which", lambda name: None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="provena-mcp was not found; reinstall provena-agent-memory in the active environment",
+    ):
+        installed_command("provena-mcp")
 
 
 def test_codex_config_uses_installed_connector():
