@@ -1,8 +1,10 @@
 import json
+
+import pytest
 from argparse import Namespace
 from uuid import uuid4
 
-from provena.cli import _ensure_console_reviewer, _existing_quickstart_connection, _quickstart_command, build_client_config, installed_mcp_command, render_values
+from provena.cli import _connect_command, _ensure_console_reviewer, _existing_quickstart_connection, _quickstart_command, build_client_config, installed_mcp_command, render_values
 
 
 def test_installed_connector_prefers_current_python_environment(monkeypatch, tmp_path):
@@ -31,22 +33,38 @@ def test_codex_config_uses_installed_connector():
     assert f'PROVENA_SCOPE_ID = "{scope_id}"' in rendered
 
 
-def test_generic_config_is_valid_mcp_json_for_installed_connector():
+@pytest.mark.parametrize("client", ["claude", "gemini", "generic"])
+def test_json_client_configs_use_installed_connector_without_args(client):
     scope_id = str(uuid4())
     config = json.loads(
         build_client_config(
-            "claude",
-            "http://127.0.0.1:8000",
-            "secret-key",
+            client,
+            "http://127.0.0.1:8000/",
+            "placeholder-key",
             scope_id,
             "/opt/provena/bin/provena-mcp",
         )
     )
 
     server = config["mcpServers"]["provena"]
-    assert server["command"] == "/opt/provena/bin/provena-mcp"
-    assert "args" not in server
-    assert server["env"]["PROVENA_SCOPE_ID"] == scope_id
+    assert server == {
+        "command": "/opt/provena/bin/provena-mcp",
+        "env": {
+            "PROVENA_API_URL": "http://127.0.0.1:8000",
+            "PROVENA_API_KEY": "placeholder-key",
+            "PROVENA_SCOPE_ID": scope_id,
+        },
+    }
+
+
+def test_generic_install_is_rejected_before_host_setup(monkeypatch):
+    monkeypatch.setattr("provena.cli.install_host", lambda *args, **kwargs: pytest.fail("install_host must not run"))
+    args = Namespace(
+        client="generic", install=True, api_url="http://127.0.0.1:8000",
+        api_key="placeholder-key", scope_id=str(uuid4()),
+    )
+    with pytest.raises(RuntimeError, match="--install requires a supported host"):
+        _connect_command(args)
 
 
 def test_shell_bootstrap_output_quotes_credentials():
