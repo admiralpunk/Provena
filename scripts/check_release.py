@@ -77,11 +77,11 @@ def main() -> None:
     for path in (demo_video, demo_poster):
         if not path.is_file() or path.stat().st_size == 0:
             mismatches.append(f"missing product demo asset: {path.relative_to(ROOT)}")
-    github_demo_url = "https://github.com/user-attachments/assets/90180f49-6817-418f-9165-abcf6b79a94b"
+    github_demo_url = "https://github.com/user-attachments/assets/37fe219c-b678-4c6d-811d-bfdd37552628"
     if github_demo_url not in readme:
         mismatches.append(f"README.md is missing native GitHub product demo: {github_demo_url}")
     pypi_demo_urls = (
-        "https://cdn.jsdelivr.net/gh/admiralpunk/Provena@master/docs/assets/provena-product-demo.mp4",
+        "https://github.com/user-attachments/assets/37fe219c-b678-4c6d-811d-bfdd37552628",
         "https://raw.githubusercontent.com/admiralpunk/Provena/master/docs/assets/provena-product-demo.jpg",
     )
     for url in pypi_demo_urls:

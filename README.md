@@ -22,7 +22,7 @@ The result is agent context that can be inspected, challenged, scoped, and expla
 
 **See evidence-backed agent memory in action.**
 
-*A 90-second walkthrough of setup, cross-session recall, and the Provena operator console.*
+*A one-minute walkthrough of setup, cross-session recall, and the Provena operator console.*
 
 </div>
 
@@ -156,9 +156,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.11/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.11/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.11/default.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.12/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.12/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.12/default.env.example
 cp .env.example .env
 ```
 
