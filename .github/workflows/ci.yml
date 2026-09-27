@@ -45,6 +45,7 @@ jobs:
       - run: alembic check
       - run: pytest -q
       - run: python scripts/check_release.py
+      - run: python scripts/check_docs_links.py
 
   frontend:
     name: Frontend
