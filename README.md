@@ -148,6 +148,8 @@ If `pipx` is not installed, follow the [official pipx installation instructions]
 
 This prepares the version-matched Compose deployment, preserves an existing database and `.env`, starts PostgreSQL and local Ollama models, bootstraps separate agent and reviewer credentials, installs MCP and lifecycle hooks for the selected host, and starts the operator console. The command prints the scope-specific console URL.
 
+Quickstart uses a digest-pinned, third-party [CPU-only Ollama image](https://hub.docker.com/r/alpine/ollama). Its Linux/amd64 image download is about 32 MB; the default extraction and embedding models still download about 1.26 GB. This setup does not use GPU acceleration. See [ADR 0022](docs/adr/0022-cpu-only-ollama-image-for-local-setup.md) for the image choice and its trust tradeoff.
+
 After this explicit setup, ordinary prompts and final responses are captured automatically and relevant candidate or reviewed claims are supplied to later turns. Restart the selected host and review Provena under `/hooks` and `/mcp`. `pip install` alone never edits an agent's configuration or begins capture. See [ADR 0020](docs/adr/0020-one-command-local-onboarding-and-default-host-memory.md) and [ADR 0021](docs/adr/0021-user-scoped-agent-host-installers.md).
 
 ### Manual self-hosted release setup
@@ -156,9 +158,9 @@ Published releases provide prebuilt API and console images. Download the three d
 
 ```bash
 mkdir provena && cd provena
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.12/compose.yaml
-curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.12/compose.ollama.yaml
-curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.12/default.env.example
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.13/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/download/v0.1.13/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/download/v0.1.13/default.env.example
 cp .env.example .env
 ```
 

@@ -31,6 +31,8 @@ The optional override adds Ollama and downloads the configured extraction and em
 docker compose -f compose.yaml -f compose.ollama.yaml up -d postgres ollama ollama-models api
 ```
 
+The override pins the third-party `alpine/ollama:0.34.2` CPU-only image by digest. It keeps Ollama models in the existing `ollama_data` volume, so changing the image does not require downloading models again when that volume is present. The image does not support GPU acceleration; the default model files still total about 1.26 GB.
+
 ## Upgrades and backups
 
 Pin `PROVENA_VERSION` in `.env`. Before changing it, create a PostgreSQL backup:

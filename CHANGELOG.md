@@ -4,6 +4,20 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-09-28
+
+### Changed
+
+- Use a digest-pinned CPU-only Ollama image in local and release Compose setups, reducing the Linux/amd64 image download while keeping the existing extraction and embedding models.
+- Document the third-party image choice and CPU-only behavior in the setup guides and ADR 0022.
+
+## [0.1.12] - 2026-09-27
+
+### Changed
+
+- Improve contributor onboarding and project demo links.
+- Expand MCP configuration output test coverage.
+
 ## [0.1.11] - 2026-09-25
 
 ### Changed
@@ -105,7 +119,9 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/admiralpunk/Provena/compare/v0.1.12...v0.1.13
+[0.1.12]: https://github.com/admiralpunk/Provena/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/admiralpunk/Provena/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/admiralpunk/Provena/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/admiralpunk/Provena/compare/v0.1.8...v0.1.9

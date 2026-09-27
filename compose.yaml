@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:0.34.2
+    image: alpine/ollama:0.34.2@sha256:d6043eedd113d69b6cb2361aa7411988a63c69c5fd1e922974528c3b63b3a338
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
 
   ollama-models:
-    image: ollama/ollama:0.34.2
+    image: alpine/ollama:0.34.2@sha256:d6043eedd113d69b6cb2361aa7411988a63c69c5fd1e922974528c3b63b3a338
     entrypoint: ["/bin/sh", "-c"]
     command:
       - 'ollama pull "$${EXTRACTION_MODEL}" && ollama pull "$${EMBEDDING_MODEL}"'
