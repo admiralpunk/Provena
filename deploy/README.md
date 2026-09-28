@@ -2,6 +2,17 @@
 
 These Compose files use prebuilt, versioned images. They are intended for evaluating Provena on one machine. Ports bind to loopback by default; place an authenticated TLS reverse proxy in front of the service before exposing it to a network.
 
+## Download the release files
+
+```bash
+mkdir provena-server && cd provena-server
+curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.yaml
+curl -LO https://github.com/admiralpunk/Provena/releases/latest/download/compose.ollama.yaml
+curl -Lo .env.example https://github.com/admiralpunk/Provena/releases/latest/download/default.env.example
+```
+
+These files are also available from the [latest GitHub release](https://github.com/admiralpunk/Provena/releases/latest). Keep the `.env` file and PostgreSQL volume when updating the deployment files.
+
 ## Core mode
 
 Core mode supports explicit memories, manual claims, review, provenance, and full-text retrieval without downloading an extraction model.

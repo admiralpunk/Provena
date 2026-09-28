@@ -14,7 +14,7 @@ Documentation, tests, accessibility improvements, reproducible bug reports, and 
 
 ## Development setup
 
-Follow the local setup in `README.md`, then run:
+Follow the [local development guide](docs/development.md), then run:
 
 ```bash
 docker compose up -d postgres
