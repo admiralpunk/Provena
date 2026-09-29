@@ -4,6 +4,13 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-09-29
+
+### Fixed
+
+- Keep the MCP Registry description within its 100-character limit and validate that limit before tagging.
+- Publish matching package and registry metadata from one release tag.
+
 ## [0.1.14] - 2026-09-29
 
 ### Changed
@@ -128,7 +135,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/admiralpunk/Provena/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/admiralpunk/Provena/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/admiralpunk/Provena/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/admiralpunk/Provena/compare/v0.1.11...v0.1.12
