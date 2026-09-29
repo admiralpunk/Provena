@@ -68,6 +68,14 @@ The tag starts `.github/workflows/release.yml`, which:
 
 PyPI versions cannot be replaced. If publication is incorrect, fix the issue and release a new version.
 
+If only MCP Registry publication fails after PyPI succeeds, fix `server.json` on `master` without moving the release tag. Validate it with the pinned publisher, then rerun the registry publication job from the current default branch:
+
+```bash
+gh workflow run publish-mcp-registry.yml --ref master
+```
+
+The standalone workflow republishes the current `server.json` version without uploading the same package to PyPI again.
+
 ## Post-release smoke test
 
 On a clean machine, download only the GitHub release deployment files and verify:
