@@ -11,7 +11,7 @@
   Know what an agent remembers, where it came from, and why it was retrieved.
 </p>
 
-Provena connects Codex, Claude Code, Gemini CLI, and other MCP clients to a shared memory service. Every structured claim retains evidence pointing to its immutable source event, along with scope, authority, review state, validity time, conflicts, and retrieval history.
+Provena is a self-hosted MCP memory service for AI agents, including Codex, Claude Code, and Gemini CLI. It carries context across sessions while keeping each structured claim linked to its immutable source event. You can inspect the claim's scope, authority, review state, validity time, conflicts, and retrieval history to understand why an agent remembers it.
 
 ## Product Demo
 
