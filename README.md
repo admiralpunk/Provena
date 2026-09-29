@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Evidence-backed memory for AI agents.</strong><br>Know what an agent remembers—and why.</p>
 
-Provena gives Codex, Claude Code, Gemini CLI, and other MCP clients persistent memory with a traceable source. It stores what was said separately from what an agent inferred, so a remembered claim can be explained, reviewed, and scoped instead of becoming an opaque vector match.
+Provena is an open-source, self-hosted memory service for AI agents. Its MCP connector gives Codex, Claude Code, Gemini CLI, and other clients context across sessions. Each claim stays linked to its source event, review status, and scope, so you can inspect what an agent remembers and why.
 
 ## Product demo
 
@@ -16,7 +16,7 @@ Watch a walkthrough of setup, cross-session recall, and the operator console:
 
 https://github.com/user-attachments/assets/37fe219c-b678-4c6d-811d-bfdd37552628
 
-## Why it exists
+## Why provenance matters
 
 An agent can retrieve a relevant fact that is wrong, stale, or taken from an untrusted source. Provena keeps the original evidence and the derived memory separate:
 

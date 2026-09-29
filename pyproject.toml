@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "provena-agent-memory"
 version = "0.1.13"
-description = "Evidence-backed memory for AI agents"
+description = "Self-hosted MCP memory for AI agents with evidence-backed, explainable claims"
 readme = "PYPI.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Aniket Kolte" }]
-keywords = ["ai-agents", "memory", "mcp", "provenance", "audit"]
+keywords = ["ai-agent-memory", "persistent-memory", "mcp-server", "provenance", "codex", "claude-code", "gemini-cli", "ollama"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -54,6 +54,8 @@ Homepage = "https://github.com/admiralpunk/Provena"
 Documentation = "https://github.com/admiralpunk/Provena#readme"
 Repository = "https://github.com/admiralpunk/Provena.git"
 Issues = "https://github.com/admiralpunk/Provena/issues"
+Changelog = "https://github.com/admiralpunk/Provena/blob/master/CHANGELOG.md"
+Security = "https://github.com/admiralpunk/Provena/blob/master/SECURITY.md"
 
 [project.scripts]
 provena = "provena.cli:main"
