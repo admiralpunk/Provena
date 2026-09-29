@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.admiralpunk/provena-memory",
   "title": "Provena Agent Memory",
-  "description": "Self-hosted MCP memory for AI agents with evidence-backed claims, cross-session retrieval, and provenance explanations.",
+  "description": "Self-hosted MCP memory for AI agents: persistent context with evidence-backed claims.",
   "repository": {
     "url": "https://github.com/admiralpunk/Provena",
     "source": "github"

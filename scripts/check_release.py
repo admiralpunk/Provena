@@ -63,6 +63,8 @@ def main() -> None:
         mismatches.append("deploy/.env.example does not use the package version")
     if server["packages"][0]["identifier"] != distribution_name:
         mismatches.append("server.json package identifier differs from pyproject distribution name")
+    if len(server["description"]) > 100:
+        mismatches.append("server.json description exceeds the MCP Registry 100-character limit")
     marker = f"<!-- mcp-name: {server['name']} -->"
     if marker not in readme:
         mismatches.append("README is missing the MCP Registry ownership marker")
