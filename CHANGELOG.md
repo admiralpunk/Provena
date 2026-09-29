@@ -4,6 +4,15 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-09-29
+
+### Changed
+
+- Make the README shorter and move detailed local development and self-hosting steps into focused guides.
+- Use a simple change-of-mind example to explain events, claims, and preserved evidence.
+- Clarify Provena's self-hosted MCP memory role in the README, PyPI description, and MCP Registry metadata.
+- Add package discovery keywords and links to the changelog and security policy.
+
 ## [0.1.13] - 2026-09-28
 
 ### Changed
@@ -119,7 +128,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Next.js operator console for overview, review, conflicts, retrievals, scopes, integrations, audit, and settings.
 - Versioned self-hosted Compose deployment and public release automation.
 
-[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/admiralpunk/Provena/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/admiralpunk/Provena/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/admiralpunk/Provena/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/admiralpunk/Provena/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/admiralpunk/Provena/compare/v0.1.10...v0.1.11
