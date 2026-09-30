@@ -1,6 +1,9 @@
+import subprocess
 from pathlib import Path
 
-from provena.quickstart import compose_environment, prepare_release, read_env, start_automatic_memory_and_console, start_core
+import pytest
+
+from provena.quickstart import compose_environment, prepare_release, read_env, require_local_tools, start_automatic_memory_and_console, start_core
 
 
 TEMPLATE = """PROVENA_VERSION=0.0.0
@@ -92,3 +95,44 @@ def test_start_console_passes_managed_credentials_to_compose(monkeypatch, tmp_pa
 
     assert calls[0][1]["env"]["PROVENA_API_KEY"] == "current-key"
     assert calls[0][1]["env"]["PROVENA_SCOPE_ID"] == "current-scope"
+
+
+def test_require_local_tools_names_missing_docker(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: None if name == "docker" else f"/usr/bin/{name}")
+
+    with pytest.raises(RuntimeError, match="docker"):
+        require_local_tools("codex")
+
+
+def test_require_local_tools_names_missing_client(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None)
+
+    with pytest.raises(RuntimeError, match="codex"):
+        require_local_tools("codex")
+
+
+def test_require_local_tools_rejects_broken_compose(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(args=command, returncode=1, stdout="", stderr="boom")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="Docker Compose is required"):
+        require_local_tools("claude")
+
+    assert calls == [["docker", "compose", "version"]]
+
+
+def test_require_local_tools_passes_when_tools_available(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+
+    def fake_run(command, **kwargs):
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="Docker Compose version v2", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    assert require_local_tools("gemini") is None
