@@ -209,17 +209,35 @@ provena connect gemini --install
 
 Run only the command for the host you use. Restart it, then review Provena under `/hooks` and `/mcp`. Claude Code stores hooks in `~/.claude/settings.json` and its user MCP entry in `~/.claude.json`. Gemini CLI stores both in `~/.gemini/settings.json`. Each host receives a separate mode `0600` Provena connection file, so its API key is not duplicated in hook or MCP configuration.
 
-### Connect another MCP client
+### Connect another stdio MCP client
 
-Generate the appropriate configuration and add the printed JSON to that client's MCP configuration:
+After installing the published package with pipx (or pip in a persistent environment), ask your operator for the API URL, **agent** key, and scope UUID. Set all three values and print the generic MCP configuration:
 
 ```bash
-provena connect claude
-provena connect gemini
+export PROVENA_API_URL="https://memory.example.com"
+export PROVENA_API_KEY="paste-agent-key"
+export PROVENA_SCOPE_ID="00000000-0000-4000-8000-000000000000"
 provena connect generic
 ```
 
-After adding the configuration, restart the client. Provena exposes MCP tools for attributed retrieval, explicit memory capture, candidate claims, and `memory_explain` provenance traces.
+Replace the example values with your own before running the command. The output has this standard MCP JSON shape, with `command` set to the absolute path of the installed `provena-mcp` executable:
+
+```json
+{
+  "mcpServers": {
+    "provena": {
+      "command": "/absolute/path/to/provena-mcp",
+      "env": {
+        "PROVENA_API_URL": "https://memory.example.com",
+        "PROVENA_API_KEY": "paste-agent-key",
+        "PROVENA_SCOPE_ID": "00000000-0000-4000-8000-000000000000"
+      }
+    }
+  }
+}
+```
+
+Add the printed `provena` entry to your client's stdio MCP server configuration, preserving the command path from your own output, then restart the client. `provena connect generic` prints configuration only: it does not install lifecycle hooks or automatically capture complete conversations. Use the MCP tools explicitly to record events or candidate claims.
 
 ## Open the operator console
 
