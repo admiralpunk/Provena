@@ -8,6 +8,8 @@
 
 <p align="center"><strong>Evidence-backed memory for AI agents.</strong><br>Know what an agent remembers—and why.</p>
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/admiralpunk/provena)](https://m8ven.ai/mcp/admiralpunk/provena)
+
 Provena is an open-source, self-hosted memory service for AI agents. Its MCP connector gives Codex, Claude Code, Gemini CLI, and other clients context across sessions. Each claim stays linked to its source event, review status, and scope, so you can inspect what an agent remembers and why.
 
 ## Product demo
