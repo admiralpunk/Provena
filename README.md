@@ -88,6 +88,8 @@ To check that the API and database are running:
 provena status
 ```
 
+To follow a captured Codex turn into a candidate claim, see the [first-memory walkthrough](docs/first-memory.md).
+
 ### Connect to an existing service
 
 Ask its operator for an API URL, **agent** API key, and project or branch scope ID. With the connector installed, run:
