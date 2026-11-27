@@ -18,13 +18,14 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY README.md LICENSE ./
 COPY src ./src
+# The package also ships the migrations (ADR 0026), so they must be present to install it.
+COPY alembic ./alembic
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install ".[server]" \
     && addgroup --system provena \
     && adduser --system --ingroup provena --home /app provena
 
 COPY alembic.ini ./
-COPY alembic ./alembic
 COPY scripts ./scripts
 
 USER provena
