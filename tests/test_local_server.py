@@ -157,7 +157,7 @@ def _port_free(port: int) -> bool:
 
 
 @pytest.mark.skipif(not os.getenv("PROVENA_PG_BINDIR"), reason="set PROVENA_PG_BINDIR to a PostgreSQL 16+ bin directory with pgvector")
-def test_system_postgres_service_end_to_end(tmp_path):
+def test_system_postgres_service_end_to_end(tmp_path, capsys):
     if not _port_free(ls.API_PORT):
         pytest.skip("port 8000 is in use")
     state = tmp_path / "state"
@@ -182,6 +182,32 @@ def test_system_postgres_service_end_to_end(tmp_path):
         saved = request_json(api, "/memories", method="POST", headers=agent, body={"scope_id": scope, "source_kind": "user_statement", "text": "CI runs on GitHub Actions.", "proposition": {"subject": "project", "predicate": "ci_provider", "value": {"name": "GitHub Actions"}}})
         found = request_json(api, f"/claims?scope_id={scope}&q=which%20ci%20provider", headers=agent)
         assert [claim["id"] for claim in found["claims"]] == [saved["claim"]["id"]]
+
+        from provena import cli
+
+        connection = tmp_path / "connection.json"
+        connection.write_text(json.dumps({"api_url": api, "api_key": workspace["PROVENA_AGENT_KEY"], "scope_id": scope}))
+        scopes_before = request_json(api, "/operator/scopes", headers=agent)["items"]
+        scope_ids_before = {str(item["id"]) for item in scopes_before}
+        main_claims_before = request_json(api, f"/operator/claims?scope_id={scope}", headers=agent)["total"]
+
+        assert cli._demo_command(Namespace(host=None, config=str(connection), api_url=api)) == 0
+        output = capsys.readouterr().out
+
+        assert sum(line.startswith("PROVENA RECEIPT") for line in output.splitlines()) == 2
+        scopes_after = request_json(api, "/operator/scopes", headers=agent)["items"]
+        demo_scopes = [
+            item
+            for item in scopes_after
+            if str(item["id"]) not in scope_ids_before
+            and item["kind"] == "project"
+            and str(item["project_name"]).startswith("provena-demo ")
+        ]
+        assert len(demo_scopes) == 1
+        demo_scope = str(demo_scopes[0]["id"])
+        assert demo_scope != scope
+        assert request_json(api, f"/operator/claims?scope_id={demo_scope}", headers=agent)["total"] == 2
+        assert request_json(api, f"/operator/claims?scope_id={scope}", headers=agent)["total"] == main_claims_before
 
         assert ls.stop_service(state) == {"api_stopped": True, "postgres_stopped": True}
         assert ls.service_status(state)["postgres"] == "stopped"
