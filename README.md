@@ -90,6 +90,21 @@ provena status
 
 To follow a captured Codex turn into a candidate claim, see the [first-memory walkthrough](docs/first-memory.md).
 
+### Claude Code plugin
+
+Claude Code users can install Provena as a plugin instead of letting quickstart edit Claude's settings. Install the connector, prepare the connection, then add the plugin in Claude Code:
+
+```bash
+pipx install provena-agent-memory
+provena quickstart claude --plugin   # or, for an existing service: provena connect claude --plugin
+```
+
+```text
+/plugin install provena --marketplace admiralpunk/Provena
+```
+
+On Claude Code versions older than 2.1.275, run `/plugin marketplace add admiralpunk/Provena` and then `/plugin install provena@provena`. The plugin adds the MCP server, the capture and recall hooks, and two skills: `/provena:status` checks the setup, and `/provena:why <topic>` explains why a memory exists. The `--plugin` option writes only the protected connection file and removes Provena hooks that an earlier quickstart added, so turns are never captured twice. The plugin requires Provena 0.1.16 or later.
+
 ### Connect to an existing service
 
 Ask its operator for an API URL, **agent** API key, and project or branch scope ID. With the connector installed, run:

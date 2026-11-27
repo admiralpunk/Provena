@@ -4,6 +4,13 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+### Added
+
+- Add a Claude Code plugin and marketplace (`/plugin install provena --marketplace admiralpunk/Provena`) with the MCP server, capture and recall hooks, and `/provena:status` and `/provena:why` skills (ADR 0023).
+- Add `--plugin` to `provena quickstart claude` and `provena connect claude`. It writes the protected connection file and removes Provena hooks and the MCP entry that an earlier user-scoped install added, so turns are not captured twice.
+- Add `--host HOST` to `provena-mcp`, `provena-agent-context`, and `provena-agent-capture` to read the connection file that onboarding wrote for that host. Hooks stay inert, and exit successfully, until it exists.
+- `provena status` warns when the plugin and user-scoped hooks would capture every turn twice.
+
 ### Fixed
 
 - Show agents why an MCP tool failed. An unreachable service, rejected credentials, an invalid ID, or an out-of-scope claim now returns a specific message with a next step, instead of the bare `Error executing tool <name>` that the MCP SDK reports for unexpected exceptions.

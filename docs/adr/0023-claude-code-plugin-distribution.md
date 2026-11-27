@@ -1,6 +1,6 @@
 # ADR 0023: Claude Code plugin distribution
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-27
 - Extends: ADR 0019, ADR 0020, and ADR 0021
 
@@ -27,7 +27,9 @@ The ADR 0021 boundaries still apply. Installing software must not silently begin
 
 5. **Enabling the plugin is the explicit opt-in for capture,** in the same way that running quickstart is today. If the connection file does not exist, the hooks exit successfully without capturing and print one line explaining how to finish setup. This follows the existing fail-open hook behavior.
 
-6. **Versions move together.** The plugin's `version` matches the package version and is included in `scripts/check_release.py`, so `/plugin update` notices each release. CI runs `claude plugin validate --strict` when the Claude Code CLI is available.
+6. **Hooks can never block a prompt.** Claude Code treats a `UserPromptSubmit` hook that exits with code 2 as a block, and `argparse` exits with code 2 on an unknown option. A plugin can be installed alongside an older connector that lacks `--host`, or with no connector at all. Every plugin hook command therefore ends in `|| true`. The connector itself already fails open, so this only changes what an outdated or missing install can do.
+
+7. **Versions move together.** The plugin's `version` matches the package version and is included in `scripts/check_release.py`, so `/plugin update` notices each release. CI runs `claude plugin validate --strict` when the Claude Code CLI is available.
 
 ## Consequences
 

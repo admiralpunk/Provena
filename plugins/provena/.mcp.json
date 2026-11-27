@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "provena": {
+      "command": "provena-mcp",
+      "args": ["--host", "claude"]
+    }
+  }
+}
