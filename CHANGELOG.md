@@ -4,6 +4,10 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+### Fixed
+
+- Show agents why an MCP tool failed. An unreachable service, rejected credentials, an invalid ID, or an out-of-scope claim now returns a specific message with a next step, instead of the bare `Error executing tool <name>` that the MCP SDK reports for unexpected exceptions.
+
 ## [0.1.15] - 2026-09-29
 
 ### Fixed

@@ -7,8 +7,25 @@ from uuid import UUID
 
 import httpx
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from .connection_config import load_connection_environment
+
+
+class ProvenaToolError(ToolError, ValueError):
+    """An anticipated failure whose message the MCP SDK passes to the agent.
+
+    The SDK withholds the text of any exception that is not a ``ToolError``, so an
+    unreachable service or a rejected key would otherwise reach the agent only as
+    ``Error executing tool <name>``.
+    """
+
+
+def _uuid(value: str, name: str) -> UUID:
+    try:
+        return UUID(value)
+    except (TypeError, ValueError) as error:
+        raise ProvenaToolError(f"{name} must be a UUID") from error
 
 
 class ProvenaHTTPClient:
@@ -19,18 +36,28 @@ class ProvenaHTTPClient:
         self.http = http or httpx.Client(timeout=10)
 
     def request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        response = self.http.request(method, f"{self.base_url}{path}", headers={"X-API-Key": self.api_key}, **kwargs)
+        try:
+            response = self.http.request(method, f"{self.base_url}{path}", headers={"X-API-Key": self.api_key}, **kwargs)
+        except httpx.TimeoutException as error:
+            raise ProvenaToolError(f"Provena service at {self.base_url} did not respond in time; run `provena status` to check it") from error
+        except httpx.TransportError as error:
+            raise ProvenaToolError(
+                f"Provena service is not reachable at {self.base_url}; start it (for a local setup, rerun `provena quickstart <host>`) and run `provena status` to check it"
+            ) from error
         if response.is_error:
             try:
                 detail = response.json().get("detail", "request failed")
-            except ValueError:
+            except (ValueError, AttributeError):
                 detail = "request failed"
-            raise ValueError(f"Provena API returned {response.status_code}: {detail}")
+            hint = ""
+            if response.status_code in (401, 403):
+                hint = "; check PROVENA_API_KEY and PROVENA_SCOPE_ID in the MCP configuration"
+            raise ProvenaToolError(f"Provena API returned {response.status_code}: {detail}{hint}")
         return response.json()
 
     def search(self, query: str | None = None, predicate: str | None = None, limit: int = 20) -> dict[str, Any]:
         if not 1 <= limit <= 100:
-            raise ValueError("limit must be between 1 and 100")
+            raise ProvenaToolError("limit must be between 1 and 100")
         params: dict[str, Any] = {"scope_id": self.scope_id, "limit": limit}
         if predicate:
             params["predicate"] = predicate
@@ -40,7 +67,7 @@ class ProvenaHTTPClient:
 
     def capture_turn(self, role: Literal["user", "assistant"], text: str, session_ref: str | None = None) -> dict[str, Any]:
         if not text.strip():
-            raise ValueError("turn text is required")
+            raise ProvenaToolError("turn text is required")
         body: dict[str, Any] = {"scope_id": self.scope_id, "source_kind": "user_statement" if role == "user" else "assistant_inference", "text": text}
         if session_ref:
             body["session_external_ref"] = session_ref[:200]
@@ -51,16 +78,16 @@ class ProvenaHTTPClient:
 
     def record_event(self, text: str, source_kind: Literal["assistant_inference", "hypothesis"]) -> dict[str, Any]:
         if not text.strip():
-            raise ValueError("event text is required")
+            raise ProvenaToolError("event text is required")
         return self.request("POST", "/events", json={"scope_id": self.scope_id, "source_kind": source_kind, "payload": {"text": text}})
 
     def remember(self, text: str, subject: str, predicate: str, value: dict[str, Any]) -> dict[str, Any]:
         if not text.strip():
-            raise ValueError("memory text is required")
+            raise ProvenaToolError("memory text is required")
         return self.request("POST", "/memories", json={"scope_id": self.scope_id, "source_kind": "assistant_inference", "text": text, "proposition": {"subject": subject, "predicate": predicate, "value": value}})
 
     def propose_claim(self, event_id: str, subject: str, predicate: str, value: dict[str, Any], valid_from: str | None = None, valid_to: str | None = None) -> dict[str, Any]:
-        body: dict[str, Any] = {"scope_id": self.scope_id, "subject": subject, "predicate": predicate, "value": value, "evidence_event_ids": [str(UUID(event_id))]}
+        body: dict[str, Any] = {"scope_id": self.scope_id, "subject": subject, "predicate": predicate, "value": value, "evidence_event_ids": [str(_uuid(event_id, "event_id"))]}
         if valid_from:
             body["valid_from"] = valid_from
         if valid_to:
@@ -68,9 +95,9 @@ class ProvenaHTTPClient:
         return self.request("POST", "/claims", json=body)
 
     def explain(self, claim_id: str) -> dict[str, Any]:
-        explanation = self.request("GET", f"/claims/{UUID(claim_id)}/explain")
+        explanation = self.request("GET", f"/claims/{_uuid(claim_id, 'claim_id')}/explain")
         if explanation["claim"]["scope_id"] != self.scope_id:
-            raise ValueError("claim is outside the configured MCP scope")
+            raise ProvenaToolError("claim is outside the configured MCP scope")
         return explanation
 
 
