@@ -53,7 +53,7 @@ docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --qu
 Create the release only from a reviewed commit with green CI:
 
 ```bash
-VERSION=0.1.15
+VERSION=0.1.16
 git tag -a "v${VERSION}" -m "Provena ${VERSION}"
 git push origin "v${VERSION}"
 ```

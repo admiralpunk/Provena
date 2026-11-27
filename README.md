@@ -136,7 +136,7 @@ Replace `codex` with `claude` or `gemini` as needed. For another MCP client, use
 
 ### Other setup paths
 
-- **Manual self-hosting:** [download the v0.1.15 Compose file](https://github.com/admiralpunk/Provena/releases/download/v0.1.15/compose.yaml) and follow the [deployment guide](deploy/README.md) for the remaining files, credentials, upgrades, and backups.
+- **Manual self-hosting:** [download the v0.1.16 Compose file](https://github.com/admiralpunk/Provena/releases/download/v0.1.16/compose.yaml) and follow the [deployment guide](deploy/README.md) for the remaining files, credentials, upgrades, and backups.
 - **Develop from source:** follow the [local development guide](docs/development.md) for Python, Docker, the console, and tests.
 
 ## FAQ

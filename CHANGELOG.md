@@ -4,6 +4,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-11-27
+
 ### Added
 
 - Add a Claude Code plugin and marketplace (`/plugin install provena --marketplace admiralpunk/Provena`) with the MCP server, capture and recall hooks, and `/provena:status` and `/provena:why` skills (ADR 0023).

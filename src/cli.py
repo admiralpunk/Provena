@@ -28,7 +28,7 @@ def package_version() -> str:
     # scripts/check_release.py keeps this synchronized with package metadata,
     # images, deployment files, and release tags. A constant also prevents a
     # stale source-tree egg-info directory from selecting an older deployment.
-    return "0.1.15"
+    return "0.1.16"
 
 
 def request_json(
