@@ -136,3 +136,50 @@ def test_require_local_tools_passes_when_tools_available(monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
 
     assert require_local_tools("gemini") is None
+
+
+def test_model_mode_prefers_explicit_choices_then_host_ollama():
+    from provena.quickstart import choose_model_mode
+
+    assert choose_model_mode(no_local_models=True, wait_for_models=False, allow_host_ollama=True, host_models={"x"}) == "none"
+    assert choose_model_mode(no_local_models=False, wait_for_models=True, allow_host_ollama=True, host_models={"x"}) == "wait"
+    assert choose_model_mode(no_local_models=False, wait_for_models=False, allow_host_ollama=True, host_models=set()) == "host"
+    assert choose_model_mode(no_local_models=False, wait_for_models=False, allow_host_ollama=False, host_models={"x"}) == "background"
+    assert choose_model_mode(no_local_models=False, wait_for_models=False, allow_host_ollama=True, host_models=None) == "background"
+
+
+def test_missing_models_accepts_latest_tags():
+    from provena.quickstart import missing_models
+
+    assert missing_models({"qwen2.5:1.5b", "nomic-embed-text:latest"}) == []
+    assert missing_models({"llama3:latest"}) == ["qwen2.5:1.5b", "nomic-embed-text"]
+
+
+def test_host_ollama_detection_returns_none_when_nothing_listens():
+    from provena.quickstart import host_ollama_models
+
+    assert host_ollama_models("http://127.0.0.1:9", timeout=0.5) is None
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("none", [["--profile", "console", "up", "-d"]]),
+        ("background", [["-f", "compose.ollama.yaml", "up", "-d", "ollama-models"], ["-f", "compose.ollama.yaml", "--profile", "console", "up", "-d", "--no-deps", "api", "console"]]),
+        ("host", [["-f", "compose.host-ollama.yaml", "--profile", "console", "up", "-d", "--no-deps", "api", "console"]]),
+    ],
+)
+def test_model_modes_do_not_wait_for_downloads(tmp_path, mode, expected):
+    from provena.quickstart import start_memory_and_console
+
+    (tmp_path / ".env").write_text("PROVENA_VERSION=0.1.15\n")
+    calls = []
+    start_memory_and_console(tmp_path, mode, runner=lambda command, **kwargs: calls.append([part.replace(str(tmp_path) + "/", "") for part in command]))
+
+    assert len(calls) == len(expected)
+    for call, tail in zip(calls, expected):
+        assert call[:5] == ["docker", "compose", "--project-directory", str(tmp_path), "-f"]
+        rendered = " ".join(call)
+        assert " ".join(tail) in rendered
+    if mode == "none":
+        assert "ollama" not in " ".join(calls[0])

@@ -1,0 +1,14 @@
+# Use an Ollama server that already runs on this machine instead of the container
+# (ADR 0025). On macOS this keeps GPU acceleration; Docker Desktop forwards
+# host.docker.internal to the host. On Linux, Ollama must listen on an address
+# containers can reach (for example OLLAMA_HOST=0.0.0.0); quickstart checks this
+# and falls back to compose.ollama.yaml when it cannot reach the host server.
+services:
+  api:
+    environment:
+      MEMORY_PROVIDER: ollama
+      OLLAMA_BASE_URL: ${HOST_OLLAMA_URL:-http://host.docker.internal:11434}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

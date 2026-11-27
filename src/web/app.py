@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from sqlalchemy import String, cast, create_engine, func, or_, select, text
+from sqlalchemy import String, cast, create_engine, false, func, literal_column, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -116,6 +116,17 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
     def ready(db: Db):
         db.execute(text("SELECT 1"))
         return {"status": "ready", "database": "reachable"}
+
+    @app.get("/intelligence")
+    def intelligence_status():
+        """Report whether extraction and embedding models answer (ADR 0025); no tenant data."""
+        if intelligence is None:
+            return {"provider": "none", "ready": False, "detail": "memory intelligence is not configured; text recall uses full-text search"}
+        try:
+            intelligence.embed(["provena readiness check"])
+        except Exception as exc:
+            return {"provider": "configured", "extraction_model": intelligence.extraction_model, "embedding_model": intelligence.embedding_model, "ready": False, "detail": f"models are not ready yet: {str(exc)[:200]}"}
+        return {"provider": "configured", "extraction_model": intelligence.extraction_model, "embedding_model": intelligence.embedding_model, "ready": True}
 
     @app.post("/organizations", status_code=201)
     def create_organization(body: OrganizationIn, db: Db, x_bootstrap_token: Annotated[str | None, Header()] = None):
@@ -273,9 +284,7 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
             claim = create_claim(ClaimIn(scope_id=body.scope_id, subject=proposal.subject, predicate=proposal.predicate, value=proposal.value, evidence_event_ids=[event["id"]], valid_from=proposal.valid_from, valid_to=proposal.valid_to), db, org, principal)
         return {"event": event, "claim": claim, "scope_id": body.scope_id, "session_id": session_id, "source_kind": body.source_kind}
 
-    @app.post("/events/{event_id}/extract", status_code=201)
-    def extract_event(event_id: UUID, db: Db, org: Tenant, principal: Principal):
-        event = require(db.scalar(select(Event).where(Event.organization_id == org, Event.id == event_id).with_for_update()), "event")
+    def run_extraction(event: Event, db: Session, org: UUID, principal) -> dict:
         if intelligence is None:
             return {"status": "failed", "error": "memory intelligence is not configured", "claims": []}
         existing = db.scalar(select(ExtractionRun).where(ExtractionRun.organization_id == org, ExtractionRun.event_id == event.id, ExtractionRun.extractor_model == intelligence.extraction_model, ExtractionRun.embedding_model == intelligence.embedding_model, ExtractionRun.status == ExtractionStatus.COMPLETED.value).order_by(ExtractionRun.created_at.desc()))
@@ -303,6 +312,66 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
             db.add(run)
             db.flush()
             return {"id": run.id, "status": run.status, "error": run.error, "claims": [], "reused": False}
+
+    @app.post("/events/{event_id}/extract", status_code=201)
+    def extract_event(event_id: UUID, db: Db, org: Tenant, principal: Principal):
+        event = require(db.scalar(select(Event).where(Event.organization_id == org, Event.id == event_id).with_for_update()), "event")
+        return run_extraction(event, db, org, principal)
+
+    @app.post("/scopes/{scope_id}/catch-up")
+    def catch_up(scope_id: UUID, db: Db, org: Tenant, principal: Principal, limit: int = Query(default=25, ge=1, le=100)):
+        """Retry failed extractions and embed unembedded claims for the current models (ADR 0025).
+
+        Idempotent: completed runs are reused and embeddings are unique per claim and model.
+        Model output stays candidate memory; this never changes a claim's status or evidence.
+        """
+        require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
+        if intelligence is None:
+            raise HTTPException(503, "memory intelligence is not configured")
+        current = (ExtractionRun.extractor_model == intelligence.extraction_model) & (ExtractionRun.embedding_model == intelligence.embedding_model)
+        completed = select(ExtractionRun.event_id).where(ExtractionRun.organization_id == org, current, ExtractionRun.status == ExtractionStatus.COMPLETED.value)
+        retry_ids = db.scalars(
+            select(Event.id)
+            .join(ExtractionRun, (ExtractionRun.organization_id == Event.organization_id) & (ExtractionRun.event_id == Event.id))
+            .where(Event.organization_id == org, Event.scope_id == scope_id, current, ExtractionRun.status == ExtractionStatus.FAILED.value, Event.id.not_in(completed))
+            .group_by(Event.id, Event.recorded_at)
+            .order_by(Event.recorded_at)
+            .limit(limit)
+        ).all()
+        extracted = failed = 0
+        for event_id in retry_ids:
+            event = db.scalar(select(Event).where(Event.organization_id == org, Event.id == event_id).with_for_update())
+            result = run_extraction(event, db, org, principal)
+            if result["status"] == ExtractionStatus.COMPLETED.value:
+                extracted += 1
+            else:
+                failed += 1
+
+        embedded = 0
+        embed_error = None
+        has_embedding = select(ClaimEmbedding.claim_id).where(ClaimEmbedding.organization_id == org, ClaimEmbedding.model == intelligence.embedding_model)
+        eligible = [ClaimStatus.CANDIDATE.value, ClaimStatus.ACTIVE.value, ClaimStatus.VERIFIED.value, ClaimStatus.CONFLICTED.value]
+        missing = db.scalars(select(Claim).where(Claim.organization_id == org, Claim.scope_id == scope_id, Claim.status.in_(eligible), Claim.id.not_in(has_embedding)).order_by(Claim.recorded_at).limit(limit)).all()
+        if missing:
+            try:
+                vectors = intelligence.embed([claim_text(row.subject, row.predicate, row.value) for row in missing])
+                with db.begin_nested():
+                    for row, vector in zip(missing, vectors, strict=True):
+                        db.add(ClaimEmbedding(organization_id=org, claim_id=row.id, model=intelligence.embedding_model, embedding=vector))
+                embedded = len(missing)
+            except Exception as exc:
+                embed_error = str(exc)[:500]
+        return {
+            "scope_id": scope_id,
+            "extraction_model": intelligence.extraction_model,
+            "embedding_model": intelligence.embedding_model,
+            "retried_events": len(retry_ids),
+            "extracted_events": extracted,
+            "still_failing_events": failed,
+            "embedded_claims": embedded,
+            "embedding_error": embed_error,
+            "more_pending": len(retry_ids) == limit or (len(missing) == limit and embed_error is None),
+        }
 
     @app.get("/claims/{claim_id}")
     def get_claim(claim_id: UUID, db: Db, org: Tenant):
@@ -376,6 +445,31 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
         db.flush()
         return {"id": review.id, "case_relationship_id": case.id, "decision": review.decision, "superseding_claim_id": review.superseding_claim_id, "reviewer_credential_id": principal.id}
 
+    def query_vector(q: str) -> list[float] | None:
+        """Embed a query, or return None so retrieval can fall back to full-text (ADR 0025)."""
+        if intelligence is None:
+            return None
+        try:
+            return intelligence.embed([q])[0]
+        except Exception:
+            # Models may still be downloading; the retrieval audit records the fallback method.
+            return None
+
+    def fulltext_match(query, q: str, db: Session):
+        """Match claims sharing any meaningful word with q, ranked by relevance.
+
+        A whole user prompt is a typical query, so terms are ORed: requiring every word
+        would almost never match. English stemming drops stop words; the stemmed lexemes
+        are quoted and combined with the 'simple' configuration so they are not stemmed twice.
+        """
+        english = literal_column("'english'::regconfig")
+        lexemes = db.scalar(select(func.tsvector_to_array(func.to_tsvector(english, q)))) or []
+        if not lexemes:
+            return query.where(false())
+        terms = func.to_tsquery(literal_column("'simple'::regconfig"), " | ".join("'" + lexeme.replace("'", "''") + "'" for lexeme in lexemes))
+        document = func.to_tsvector(english, Claim.subject + " " + func.replace(Claim.predicate, "_", " ")).op("||")(func.to_tsvector(english, Claim.value))
+        return query.where(document.op("@@")(terms)).order_by(func.ts_rank(document, terms).desc(), Claim.recorded_at.desc())
+
     @app.get("/claims")
     def retrieve_claims(scope_id: UUID, db: Db, org: Tenant, principal: Principal, predicate: str | None = None, q: str | None = Query(default=None, min_length=1, max_length=2000), limit: int = Query(default=50, ge=1, le=100)):
         require(db.scalar(select(Scope).where(Scope.organization_id == org, Scope.id == scope_id)), "scope")
@@ -385,11 +479,13 @@ def create_app(settings: Settings | None = None, intelligence: MemoryIntelligenc
             query = query.where(Claim.predicate == predicate)
         method = "exact"
         if q:
-            if intelligence is None:
-                raise HTTPException(503, "semantic retrieval is not configured")
-            vector = intelligence.embed([q])[0]
-            query = query.join(ClaimEmbedding, (ClaimEmbedding.organization_id == Claim.organization_id) & (ClaimEmbedding.claim_id == Claim.id)).where(ClaimEmbedding.model == intelligence.embedding_model, ClaimEmbedding.dimensions == len(vector)).order_by(ClaimEmbedding.embedding.cosine_distance(vector), Claim.recorded_at.desc())
-            method = "semantic"
+            vector = query_vector(q)
+            if vector is not None:
+                query = query.join(ClaimEmbedding, (ClaimEmbedding.organization_id == Claim.organization_id) & (ClaimEmbedding.claim_id == Claim.id)).where(ClaimEmbedding.model == intelligence.embedding_model, ClaimEmbedding.dimensions == len(vector)).order_by(ClaimEmbedding.embedding.cosine_distance(vector), Claim.recorded_at.desc())
+                method = "semantic"
+            else:
+                query = fulltext_match(query, q, db)
+                method = "fulltext"
         else:
             query = query.order_by(Claim.recorded_at.desc(), Claim.id)
         rows = db.scalars(query.limit(limit)).all()

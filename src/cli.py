@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
 
-from .integrations.connection_config import default_config_home, load_connection_environment
+from .integrations.connection_config import SUPPORTED_CONNECTION_HOSTS, default_config_home, load_connection_environment, load_host_connection, setup_hint
 from .integrations.host_setup import claude_duplicate_capture, install_claude_plugin_connection, install_host
-from .quickstart import default_state_dir, prepare_release, require_local_tools, start_automatic_memory_and_console, start_core, update_env, wait_until_ready
+from .quickstart import api_reaches_ollama, choose_model_mode, default_state_dir, host_ollama_models, missing_models, prepare_release, pull_host_models_in_background, require_local_tools, start_core, start_memory_and_console, update_env, wait_until_ready
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
@@ -196,6 +196,10 @@ def _status_command(args: argparse.Namespace) -> int:
     liveness = request_json(args.api_url, "/health")
     readiness = request_json(args.api_url, "/ready")
     result: dict[str, Any] = {"api_url": args.api_url, "liveness": liveness, "readiness": readiness}
+    try:
+        result["memory_models"] = request_json(args.api_url, "/intelligence")
+    except RuntimeError:
+        result["memory_models"] = {"ready": None, "detail": "this Provena server does not report model readiness"}
     if claude_duplicate_capture():
         result["warnings"] = [DUPLICATE_CAPTURE_WARNING]
     print(json.dumps(result, indent=2))
@@ -254,6 +258,26 @@ def _connect_command(args: argparse.Namespace) -> int:
             installed_mcp_command(),
         )
     )
+    return 0
+
+
+def _catch_up_command(args: argparse.Namespace) -> int:
+    environment = load_host_connection(os.environ, args.config, args.host) if (args.config or args.host) else load_connection_environment(os.environ)
+    if environment is None:
+        raise RuntimeError(setup_hint(args.host))
+    api_url = environment.get("PROVENA_API_URL", args.api_url)
+    api_key = _required(environment.get("PROVENA_API_KEY"), "PROVENA_API_KEY")
+    scope_id = _required(environment.get("PROVENA_SCOPE_ID"), "PROVENA_SCOPE_ID")
+    totals = {"extracted_events": 0, "still_failing_events": 0, "embedded_claims": 0}
+    last: dict[str, Any] = {}
+    for _ in range(args.max_batches):
+        last = request_json(api_url, f"/scopes/{UUID(scope_id)}/catch-up", method="POST", headers={"X-API-Key": api_key})
+        for key in totals:
+            totals[key] += int(last.get(key) or 0)
+        progressed = last.get("extracted_events") or last.get("embedded_claims")
+        if not last.get("more_pending") or not progressed:
+            break
+    print(json.dumps({"status": "done" if not last.get("more_pending") else "more_pending", **totals, "embedding_error": last.get("embedding_error")}, indent=2))
     return 0
 
 
@@ -319,6 +343,51 @@ def _ensure_console_reviewer(
     )
 
 
+MODEL_MODE_NOTES = {
+    "background": (
+        "Local models are downloading in the background (about 1.26 GB). Provena already records every turn and recalls "
+        "with keyword search. When `provena status` shows memory_models ready, run `provena catch-up --host {client}` "
+        "to extract the turns captured meanwhile."
+    ),
+    "host": (
+        "Provena uses the Ollama already running on this machine. If models are still downloading, run "
+        "`provena catch-up --host {client}` once `provena status` shows memory_models ready."
+    ),
+    "wait": "Local models are downloaded and ready.",
+    "none": (
+        "Provena runs without local models: every turn is recorded, recall uses keyword search, and explicit "
+        "memory_remember still works. Rerun quickstart without --no-local-models to add extraction later."
+    ),
+}
+
+
+def _start_models(state_dir: Path, mode: str, host_models: set[str] | None) -> str:
+    if mode == "host":
+        missing = missing_models(host_models or set())
+        if missing and pull_host_models_in_background(state_dir, missing):
+            print(f"Pulling {', '.join(missing)} with your local Ollama in the background (log: {state_dir / 'ollama-pull.log'}).")
+        elif missing:
+            print(f"Your local Ollama is missing {', '.join(missing)}; run `ollama pull <model>` for each.")
+        print("Using the Ollama server already running on this machine...")
+        start_memory_and_console(state_dir, "host")
+        wait_until_ready("http://127.0.0.1:8000")
+        if api_reaches_ollama(state_dir):
+            return "host"
+        print(
+            "The Provena container cannot reach your local Ollama (on Linux it listens on 127.0.0.1 by default; "
+            "set OLLAMA_HOST=0.0.0.0 to share it). Using the Ollama container instead."
+        )
+        mode = "background"
+    if mode == "wait":
+        print("Starting local Ollama models and the Provena console; the first model download can take several minutes...")
+    elif mode == "background":
+        print("Starting the Provena console and downloading local models in the background...")
+    else:
+        print("Starting the Provena console without local models...")
+    start_memory_and_console(state_dir, mode)
+    return mode
+
+
 def _quickstart_command(args: argparse.Namespace) -> int:
     if getattr(args, "plugin", False):
         _require_plugin_host(args.client)
@@ -355,6 +424,13 @@ def _quickstart_command(args: argparse.Namespace) -> int:
         )
         print("Created a local organization, project scope, and separate agent and reviewer credentials.")
 
+    host_models = None if getattr(args, "no_host_ollama", False) or getattr(args, "no_local_models", False) else host_ollama_models()
+    mode = choose_model_mode(
+        no_local_models=getattr(args, "no_local_models", False),
+        wait_for_models=getattr(args, "wait_for_models", False),
+        allow_host_ollama=not getattr(args, "no_host_ollama", False),
+        host_models=host_models,
+    )
     if getattr(args, "plugin", False):
         installed = install_claude_plugin_connection(api_url, agent_key, scope_id)
         print("Prepared the connection file for the Provena Claude Code plugin.")
@@ -369,8 +445,7 @@ def _quickstart_command(args: argparse.Namespace) -> int:
             capture_command=installed_command("provena-agent-capture"),
         )
         print(f"Configured {args.client.title()} MCP plus automatic memory capture and retrieval.")
-    print("Starting local Ollama models and the Provena console; the first model download can take several minutes...")
-    start_automatic_memory_and_console(state_dir)
+    mode = _start_models(state_dir, mode, host_models)
     wait_until_ready(api_url)
     print(
         json.dumps(
@@ -380,12 +455,14 @@ def _quickstart_command(args: argparse.Namespace) -> int:
                 "console_url": f"http://127.0.0.1:3000/overview?scope={scope_id}",
                 "scope_id": scope_id,
                 "state_dir": str(state_dir),
+                "memory_models": mode,
                 **installed,
             },
             indent=2,
         )
     )
     print(PLUGIN_INSTALL_INSTRUCTION if getattr(args, "plugin", False) else _host_restart_instruction(args.client), file=sys.stderr)
+    print(MODEL_MODE_NOTES[mode].format(client=args.client), file=sys.stderr)
     if not getattr(args, "plugin", False):
         _warn_if_duplicate_capture()
     return 0
@@ -429,6 +506,17 @@ def build_parser() -> argparse.ArgumentParser:
     quickstart.add_argument("--organization", default="Local development")
     quickstart.add_argument("--project", default="provena-demo")
     quickstart.add_argument("--plugin", action="store_true", help="Claude Code only: prepare the Provena plugin instead of installing user-scoped hooks.")
+    models = quickstart.add_mutually_exclusive_group()
+    models.add_argument("--no-local-models", action="store_true", help="Run without Ollama: record every turn and recall with keyword search.")
+    models.add_argument("--wait-for-models", action="store_true", help="Block until the local models finish downloading (previous behaviour).")
+    quickstart.add_argument("--no-host-ollama", action="store_true", help="Ignore an Ollama already running on this machine and use the container.")
+
+    catch_up = commands.add_parser("catch-up", help="Extract turns captured before models were ready and embed unembedded claims.")
+    catch_up.add_argument("--host", choices=SUPPORTED_CONNECTION_HOSTS, help="Use the connection file onboarding wrote for this host.")
+    catch_up.add_argument("--config", help="Protected Provena connection JSON file.")
+    catch_up.add_argument("--api-url", default=os.getenv("PROVENA_API_URL", DEFAULT_API_URL))
+    catch_up.add_argument("--max-batches", type=int, default=40, help="Stop after this many batches of up to 25 events and claims.")
+    catch_up.set_defaults(handler=_catch_up_command)
     quickstart.set_defaults(handler=_quickstart_command)
     return parser
 

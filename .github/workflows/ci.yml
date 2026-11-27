@@ -91,3 +91,4 @@ jobs:
       - uses: actions/checkout@v7
       - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
       - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml -f deploy/compose.ollama.yaml config --quiet
+      - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml -f deploy/compose.host-ollama.yaml config --quiet
