@@ -4,6 +4,13 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-11-27
+
+### Fixed
+
+- Publish the API and console container images and the GitHub release that v0.1.16 could not build: the Dockerfile copied the migrations after installing the package that now ships them. CI builds the API image so this cannot recur unnoticed.
+- `PROVENA_PG_BINDIR` is now the only PostgreSQL candidate when set, and pgvector is checked only in the installation being used.
+
 ## [0.1.16] - 2026-11-27
 
 ### Added
