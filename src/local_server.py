@@ -100,10 +100,13 @@ def extension_dirs(bindir: Path, major: int, *, run: Runner = subprocess.run) ->
             prefix / "share" / "extension",
             prefix / "share" / "postgresql" / "extension",
             prefix / "share" / f"postgresql@{major}" / "extension",
-            Path("/usr/share/postgresql") / str(major) / "extension",
-            Path("/usr/share/postgresql") / "extension",
         ]
     )
+    # Debian and Ubuntu keep binaries in /usr/lib/postgresql/<major>/bin and extensions in
+    # /usr/share/postgresql/<major>/extension. Only that layout maps there, so another
+    # installation is never credited with the system server's pgvector.
+    if bindir.resolve() == Path("/usr/lib/postgresql") / str(major) / "bin":
+        dirs.append(Path("/usr/share/postgresql") / str(major) / "extension")
     return dirs
 
 
