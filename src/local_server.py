@@ -52,7 +52,8 @@ def candidate_bindirs(environ: Mapping[str, str] | None = None, *, run: Runner =
     values = os.environ if environ is None else environ
     candidates: list[Path] = []
     if values.get("PROVENA_PG_BINDIR"):
-        candidates.append(Path(values["PROVENA_PG_BINDIR"]).expanduser())
+        # An explicit choice is authoritative: never fall back to another installation.
+        return [Path(values["PROVENA_PG_BINDIR"]).expanduser()]
     pg_config = shutil.which("pg_config", path=values.get("PATH"))
     if pg_config:
         result = run([pg_config, "--bindir"], text=True, capture_output=True, check=False)

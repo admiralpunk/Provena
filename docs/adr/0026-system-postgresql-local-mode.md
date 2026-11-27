@@ -73,7 +73,7 @@ Two facts shape the design. The published wheel contains the API code but not th
 
 ## Implementation notes
 
-- `provena.local_server` implements discovery, the cluster, and supervision. `PROVENA_PG_BINDIR` is checked first; the chosen directory is recorded in the state file so restarts use the same server.
+- `provena.local_server` implements discovery, the cluster, and supervision. `PROVENA_PG_BINDIR`, when set, is the only candidate, so an explicit choice never silently falls back to another installation; the chosen directory is recorded in the state file so restarts use the same server.
 - pgvector is checked twice: for `vector.control` before anything is created, and in the running server through `pg_available_extensions`.
 - The cluster uses `initdb --auth=scram-sha-256` with a password file that is deleted immediately, and starts with `listen_addresses=127.0.0.1` and `unix_socket_directories=''` on a free port. The data directory is mode 0700 and the state file 0600. `PG_VERSION` in the data directory is the major-version lock.
 - The API runs as `python -m uvicorn provena.api:app --host 127.0.0.1 --port 8000` with the connector's own interpreter. Stale `DATABASE_URL`, model, and API-key variables from the shell are removed from its environment. Its memory settings are stored in the state file so `provena start` restores them.
