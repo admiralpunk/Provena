@@ -9,6 +9,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - `provena why <topic or claim ID>` prints a receipt for matching memories: the source words, authority, extraction, reviews, conflicts, deliveries to agents, and plain trust warnings. It searches through the operator API, so looking something up never records an agent retrieval.
 - `provena demo` runs a scripted scenario in a separate demo project: a fact you stated, a rule planted by a web page, what a later session recalls, and a receipt for each.
 
+- A memory-poisoning benchmark (`benchmarks/poisoning/`) with 23 cases and 127 checks: indirect injection through assistant output, instructions smuggled into memory values, scope and tenant isolation, and contradictions of what the user stated. It runs against real PostgreSQL in CI and was mutation-tested.
+
 ### Fixed
 
 - The Docker-free PostgreSQL cluster runs in UTC, like the container image, so API timestamps no longer carry the machine's local offset.
