@@ -126,3 +126,6 @@ jobs:
       - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
       - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml -f deploy/compose.ollama.yaml config --quiet
       - run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml -f deploy/compose.host-ollama.yaml config --quiet
+      # Build the API image so packaging changes that break the container fail here, not at release.
+      - run: docker build --tag provena-server:ci .
+      - run: docker run --rm --entrypoint python provena-server:ci -c "import provena.api, provena.local_server; print(provena.local_server.migrations_location())"
