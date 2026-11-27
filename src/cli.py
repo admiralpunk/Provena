@@ -16,7 +16,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from .integrations.connection_config import default_config_home, load_connection_environment
-from .integrations.host_setup import install_host
+from .integrations.host_setup import claude_duplicate_capture, install_claude_plugin_connection, install_host
 from .quickstart import default_state_dir, prepare_release, require_local_tools, start_automatic_memory_and_console, start_core, update_env, wait_until_ready
 
 
@@ -172,10 +172,33 @@ def _init_command(args: argparse.Namespace) -> int:
     return 0
 
 
+DUPLICATE_CAPTURE_WARNING = (
+    "Claude Code has both the Provena plugin and user-scoped Provena hooks, so each turn is captured twice. "
+    "Run `provena connect claude --plugin` to remove the user-scoped hooks."
+)
+PLUGIN_INSTALL_INSTRUCTION = (
+    "In Claude Code, run `/plugin marketplace add admiralpunk/Provena` and then "
+    "`/plugin install provena@provena`, and restart Claude Code."
+)
+
+
+def _require_plugin_host(client: str) -> None:
+    if client != "claude":
+        raise RuntimeError("--plugin is only available for claude")
+
+
+def _warn_if_duplicate_capture() -> None:
+    if claude_duplicate_capture():
+        print(f"Warning: {DUPLICATE_CAPTURE_WARNING}", file=sys.stderr)
+
+
 def _status_command(args: argparse.Namespace) -> int:
     liveness = request_json(args.api_url, "/health")
     readiness = request_json(args.api_url, "/ready")
-    print(json.dumps({"api_url": args.api_url, "liveness": liveness, "readiness": readiness}, indent=2))
+    result: dict[str, Any] = {"api_url": args.api_url, "liveness": liveness, "readiness": readiness}
+    if claude_duplicate_capture():
+        result["warnings"] = [DUPLICATE_CAPTURE_WARNING]
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -198,6 +221,13 @@ def _doctor_command(args: argparse.Namespace) -> int:
 def _connect_command(args: argparse.Namespace) -> int:
     api_key = _required(args.api_key, "PROVENA_API_KEY")
     scope_id = _required(args.scope_id, "PROVENA_SCOPE_ID")
+    if getattr(args, "plugin", False):
+        _require_plugin_host(args.client)
+        _doctor_command(args)
+        prepared = install_claude_plugin_connection(args.api_url, api_key, scope_id)
+        print(json.dumps({"status": "ready_for_plugin", "client": args.client, **prepared}, indent=2))
+        print(PLUGIN_INSTALL_INSTRUCTION, file=sys.stderr)
+        return 0
     if args.install:
         if args.client == "generic":
             raise RuntimeError("--install requires a supported host: codex, claude, or gemini")
@@ -213,6 +243,7 @@ def _connect_command(args: argparse.Namespace) -> int:
         )
         print(json.dumps({"status": "installed", "client": args.client, "automatic_memory": True, **installed}, indent=2))
         print(_host_restart_instruction(args.client), file=sys.stderr)
+        _warn_if_duplicate_capture()
         return 0
     print(
         build_client_config(
@@ -289,6 +320,8 @@ def _ensure_console_reviewer(
 
 
 def _quickstart_command(args: argparse.Namespace) -> int:
+    if getattr(args, "plugin", False):
+        _require_plugin_host(args.client)
     require_local_tools(args.client)
     state_dir = Path(args.state_dir).expanduser().resolve()
     current_version = package_version()
@@ -322,16 +355,20 @@ def _quickstart_command(args: argparse.Namespace) -> int:
         )
         print("Created a local organization, project scope, and separate agent and reviewer credentials.")
 
-    installed = install_host(
-        args.client,
-        api_url,
-        agent_key,
-        scope_id,
-        mcp_command=installed_mcp_command(),
-        context_command=installed_command("provena-agent-context"),
-        capture_command=installed_command("provena-agent-capture"),
-    )
-    print(f"Configured {args.client.title()} MCP plus automatic memory capture and retrieval.")
+    if getattr(args, "plugin", False):
+        installed = install_claude_plugin_connection(api_url, agent_key, scope_id)
+        print("Prepared the connection file for the Provena Claude Code plugin.")
+    else:
+        installed = install_host(
+            args.client,
+            api_url,
+            agent_key,
+            scope_id,
+            mcp_command=installed_mcp_command(),
+            context_command=installed_command("provena-agent-context"),
+            capture_command=installed_command("provena-agent-capture"),
+        )
+        print(f"Configured {args.client.title()} MCP plus automatic memory capture and retrieval.")
     print("Starting local Ollama models and the Provena console; the first model download can take several minutes...")
     start_automatic_memory_and_console(state_dir)
     wait_until_ready(api_url)
@@ -348,7 +385,9 @@ def _quickstart_command(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
-    print(_host_restart_instruction(args.client), file=sys.stderr)
+    print(PLUGIN_INSTALL_INSTRUCTION if getattr(args, "plugin", False) else _host_restart_instruction(args.client), file=sys.stderr)
+    if not getattr(args, "plugin", False):
+        _warn_if_duplicate_capture()
     return 0
 
 
@@ -381,6 +420,7 @@ def build_parser() -> argparse.ArgumentParser:
     connect.add_argument("--api-key", default=os.getenv("PROVENA_API_KEY"))
     connect.add_argument("--scope-id", default=os.getenv("PROVENA_SCOPE_ID"))
     connect.add_argument("--install", action="store_true", help="Install MCP plus automatic capture and retrieval hooks.")
+    connect.add_argument("--plugin", action="store_true", help="Claude Code only: write the connection file for the Provena plugin instead of user-scoped hooks.")
     connect.set_defaults(handler=_connect_command)
 
     quickstart = commands.add_parser("quickstart", help="Start local Provena and configure automatic agent memory.")
@@ -388,6 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
     quickstart.add_argument("--state-dir", default=str(default_state_dir()))
     quickstart.add_argument("--organization", default="Local development")
     quickstart.add_argument("--project", default="provena-demo")
+    quickstart.add_argument("--plugin", action="store_true", help="Claude Code only: prepare the Provena plugin instead of installing user-scoped hooks.")
     quickstart.set_defaults(handler=_quickstart_command)
     return parser
 

@@ -1,0 +1,17 @@
+{
+  "name": "provena",
+  "description": "Provena: self-hosted agent memory with receipts.",
+  "owner": {
+    "name": "admiralpunk",
+    "url": "https://github.com/admiralpunk"
+  },
+  "plugins": [
+    {
+      "name": "provena",
+      "source": "./plugins/provena",
+      "description": "Capture Claude Code turns as append-only evidence, recall attributed context, and explain why any memory exists.",
+      "category": "productivity",
+      "tags": ["memory", "provenance", "mcp", "self-hosted"]
+    }
+  ]
+}

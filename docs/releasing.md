@@ -25,6 +25,7 @@ Update the version in:
 - `pyproject.toml`
 - `frontend/package.json` and `frontend/package-lock.json`
 - `server.json`, including its package version
+- `plugins/provena/.claude-plugin/plugin.json`
 - `deploy/.env.example`
 - `CHANGELOG.md`
 
@@ -32,6 +33,7 @@ Then run:
 
 ```bash
 python scripts/check_release.py
+claude plugin validate --strict .   # when the Claude Code CLI is installed
 TEST_DATABASE_URL=postgresql+psycopg://provena:provena_dev@127.0.0.1:5437/provena_test .venv/bin/pytest -q
 cd frontend && npm run typecheck && npm run build
 ```

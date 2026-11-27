@@ -9,7 +9,7 @@ import httpx
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from .connection_config import load_connection_environment
+from .connection_config import SUPPORTED_CONNECTION_HOSTS, load_host_connection, setup_hint
 
 
 class ProvenaToolError(ToolError, ValueError):
@@ -148,8 +148,11 @@ def build_server(client: ProvenaHTTPClient) -> MCPServer:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Provena stdio MCP connector.")
     parser.add_argument("--config", help="Protected Provena connection JSON file")
+    parser.add_argument("--host", choices=SUPPORTED_CONNECTION_HOSTS, help="Use the connection file that onboarding wrote for this host")
     args = parser.parse_args()
-    environment = load_connection_environment(os.environ, args.config)
+    environment = load_host_connection(os.environ, args.config, args.host)
+    if environment is None:
+        raise SystemExit(setup_hint(args.host))
     required = ("PROVENA_API_KEY", "PROVENA_SCOPE_ID")
     missing = [name for name in required if not environment.get(name)]
     if missing:

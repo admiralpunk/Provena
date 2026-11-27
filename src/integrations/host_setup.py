@@ -386,6 +386,107 @@ def install_claude(
     }
 
 
+PLUGIN_ID_PREFIX = "provena@"
+
+
+def _remove_provena_mcp_server(document: object) -> object:
+    """Drop the user-scoped `provena` MCP entry only when it runs Provena's connector."""
+
+    if not isinstance(document, dict):
+        return document
+    servers = document.get("mcpServers")
+    if not isinstance(servers, dict):
+        return document
+    entry = servers.get("provena")
+    command = entry.get("command") if isinstance(entry, dict) else None
+    if not (isinstance(command, str) and "provena-mcp" in command):
+        return document
+    return {**document, "mcpServers": {name: value for name, value in servers.items() if name != "provena"}}
+
+
+def _has_provena_hooks(settings: object) -> bool:
+    if not isinstance(settings, dict) or not isinstance(settings.get("hooks"), dict):
+        return False
+    for groups in settings["hooks"].values():
+        for group in groups if isinstance(groups, list) else []:
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            if isinstance(handlers, list) and any(_is_provena_handler(handler) for handler in handlers):
+                return True
+    return False
+
+
+def _provena_plugin_enabled(settings: object) -> bool:
+    if not isinstance(settings, dict) or not isinstance(settings.get("enabledPlugins"), dict):
+        return False
+    return any(key.startswith(PLUGIN_ID_PREFIX) and value is True for key, value in settings["enabledPlugins"].items())
+
+
+def claude_duplicate_capture(
+    *,
+    claude_home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> bool:
+    """True when the Provena plugin and user-scoped Provena hooks would both capture each turn."""
+
+    values = environ or os.environ
+    try:
+        settings = _read_json((claude_home or default_claude_home(values)) / "settings.json")
+    except RuntimeError:
+        return False
+    return _provena_plugin_enabled(settings) and _has_provena_hooks(settings)
+
+
+def install_claude_plugin_connection(
+    api_url: str,
+    api_key: str,
+    scope_id: str,
+    *,
+    claude_home: Path | None = None,
+    claude_state: Path | None = None,
+    config_home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Prepare Claude Code for the Provena plugin (ADR 0023).
+
+    Writes the protected connection file the plugin's commands read through
+    `--host claude`, and removes Provena-owned user-scoped hooks and the
+    `provena` MCP entry from an earlier `install_claude`, so no turn is captured
+    twice. Unrelated settings, hooks, and MCP servers are preserved.
+    """
+
+    values = environ or os.environ
+    directory = claude_home or default_claude_home(values)
+    state_path = claude_state or (directory / ".claude.json" if claude_home is not None else default_claude_state(directory, values))
+    settings_path = directory / "settings.json"
+    connection_path = (config_home or default_config_home(values)) / "provena" / "claude.json"
+
+    connection = connection_document("claude", api_url, api_key, scope_id)
+    settings_document = _read_json(settings_path)
+    state_document = _read_json(state_path)
+    removed_hooks = _has_provena_hooks(settings_document)
+    settings = merge_hooks(settings_document, {}) if removed_hooks else settings_document
+    state = _remove_provena_mcp_server(state_document)
+    removed_mcp = state is not state_document
+
+    writes = [(connection_path, _json_text(connection))]
+    if removed_hooks:
+        writes.append((settings_path, _json_text(settings)))
+    if removed_mcp:
+        writes.append((state_path, _json_text(state)))
+    previous = tuple((path, path.read_bytes() if path.exists() else None) for path, _ in writes)
+    try:
+        for path, content in writes:
+            _atomic_private_write(path, content)
+    except Exception as error:
+        _restore(previous)
+        raise RuntimeError(f"Could not prepare Claude Code for the Provena plugin: {error}") from error
+    return {
+        "connection_file": str(connection_path),
+        "removed_user_hooks": str(removed_hooks).lower(),
+        "removed_user_mcp_server": str(removed_mcp).lower(),
+    }
+
+
 def install_gemini(
     api_url: str,
     api_key: str,

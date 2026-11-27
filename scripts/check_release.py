@@ -25,6 +25,7 @@ def main() -> None:
     frontend_lock = json.loads((ROOT / "frontend/package-lock.json").read_text())
     frontend_lock_version = frontend_lock["version"]
     server = json.loads((ROOT / "server.json").read_text())
+    plugin = json.loads((ROOT / "plugins/provena/.claude-plugin/plugin.json").read_text())
     deploy_env = (ROOT / "deploy/.env.example").read_text()
     readme = (ROOT / "README.md").read_text()
     pypi_readme = (ROOT / "PYPI.md").read_text()
@@ -37,6 +38,7 @@ def main() -> None:
         "frontend/package-lock.json root package": frontend_lock["packages"][""]["version"],
         "server.json": server["version"],
         "server.json package": server["packages"][0]["version"],
+        "plugins/provena/.claude-plugin/plugin.json": plugin["version"],
     }
     mismatches = [f"{source} has {value}, expected {package_version}" for source, value in expected.items() if value != package_version]
 

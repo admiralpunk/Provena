@@ -51,3 +51,41 @@ def default_config_home(environ: Mapping[str, str] | None = None) -> Path:
     configured = values.get("XDG_CONFIG_HOME")
     return Path(configured).expanduser() if configured else Path.home() / ".config"
 
+
+
+SUPPORTED_CONNECTION_HOSTS = ("codex", "claude", "gemini")
+
+
+def host_connection_path(host: str, environ: Mapping[str, str] | None = None) -> Path:
+    """Return the protected connection file that onboarding writes for HOST (ADR 0021)."""
+
+    if host not in SUPPORTED_CONNECTION_HOSTS:
+        raise ValueError(f"unsupported agent host: {host}")
+    return default_config_home(environ) / "provena" / f"{host}.json"
+
+
+def setup_hint(host: str) -> str:
+    return (
+        f"Provena is not set up for {host} yet: run `provena quickstart {host} --plugin` "
+        f"for a local service, or `provena connect {host} --plugin` for an existing one."
+    )
+
+
+def load_host_connection(
+    environ: Mapping[str, str],
+    config_path: str | Path | None = None,
+    host: str | None = None,
+) -> dict[str, str] | None:
+    """Load settings from --config, else from the --host connection file.
+
+    Returns None when only a host was given and its connection file does not exist,
+    so plugin-provided commands can stay inert until the user finishes onboarding.
+    An explicit --config path keeps priority and still fails loudly when unreadable.
+    """
+
+    if config_path is None and host is not None:
+        path = host_connection_path(host, environ)
+        if not path.exists():
+            return None
+        config_path = path
+    return load_connection_environment(environ, config_path)

@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "provena-agent-context --host claude || true",
+            "timeout": 15,
+            "statusMessage": "Loading relevant Provena memory"
+          },
+          {
+            "type": "command",
+            "command": "provena-agent-capture --host claude || true",
+            "async": true,
+            "timeout": 120,
+            "statusMessage": "Recording conversation facts"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "provena-agent-capture --host claude || true",
+            "async": true,
+            "timeout": 120,
+            "statusMessage": "Recording assistant facts"
+          }
+        ]
+      }
+    ]
+  }
+}
