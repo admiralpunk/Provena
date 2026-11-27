@@ -51,6 +51,13 @@ def test_find_postgres_explains_old_versions_and_missing_pgvector(tmp_path):
     assert "Install it with:" in str(error.value)
 
 
+def test_pgvector_check_is_tied_to_the_checked_installation(tmp_path):
+    # A Debian-layout server's extensions only count for that server, never for another bindir.
+    bare = _fake_postgres(tmp_path / "bare", 17, pgvector=False)
+    assert Path("/usr/share/postgresql/17/extension") not in ls.extension_dirs(bare, 17)
+    assert Path("/usr/share/postgresql/17/extension") in ls.extension_dirs(Path("/usr/lib/postgresql/17/bin"), 17)
+
+
 @pytest.mark.parametrize(
     ("system", "os_release", "expected"),
     [
