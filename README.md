@@ -36,6 +36,8 @@ In Provena:
 - **Changes of mind keep history.** When a fact changes, both versions stay, and a reviewed relationship records which one supersedes the other.
 - **You can ask why.** `memory_explain` traces any claim to its source event, extraction run, review actions, conflicts, and every time it was delivered to an agent.
 
+A [memory-poisoning benchmark](benchmarks/poisoning/) checks these properties on every CI run: 127 of 127 checks pass across 23 attempts to plant facts, smuggle instructions, leak across projects, and contradict the user. It also states plainly what Provena does not do: it labels a planted fact rather than blocking it.
+
 An example `memory_explain` trail, abridged:
 
 ```text
