@@ -36,9 +36,9 @@ provena quickstart codex
 # Or: provena quickstart gemini
 ```
 
-The quickstart downloads the matching deployment files, preserves an existing local database, starts PostgreSQL and local Ollama models, creates separate agent and reviewer credentials, configures the selected host, enables automatic memory capture and retrieval, and starts the browser console. The first run can take several minutes while Ollama downloads the models.
+The quickstart downloads the matching deployment files, preserves an existing local database, starts PostgreSQL and local Ollama models, creates separate agent and reviewer credentials, configures the selected host, enables automatic memory capture and retrieval, and starts the browser console. Quickstart finishes once the service is ready; the local models download in the background, and recall uses keyword search until they are ready. Run `provena catch-up --host <host>` when `provena status` shows `memory_models` ready. Use `--no-local-models` to skip models, or `--wait-for-models` to block until they are downloaded.
 
-Local quickstart uses a digest-pinned, third-party CPU-only Ollama image. The image is about 32 MB to download on Linux/amd64; the default models still download about 1.26 GB. This setup does not use GPU acceleration.
+If an Ollama server already runs on your machine, quickstart uses it (with GPU acceleration where Ollama supports it) and pulls any missing model in the background. Otherwise it uses a digest-pinned, third-party CPU-only Ollama image, about 32 MB on Linux/amd64; the default models download about 1.26 GB.
 
 Restart the selected host and review Provena under `/hooks` and `/mcp`. You can then use the agent normally: prompts and final responses are captured as immutable evidence, candidate facts are extracted, and relevant claims are added to later turns without requiring you to mention Provena. The command prints the exact console URL when setup completes.
 

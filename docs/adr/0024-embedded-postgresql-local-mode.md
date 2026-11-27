@@ -1,6 +1,6 @@
 # ADR 0024: Embedded PostgreSQL local mode
 
-- Status: Proposed
+- Status: Accepted; implementation blocked on a suitable embedded PostgreSQL package
 - Date: 2026-11-27
 - Preserves: ADR 0001 (single store)
 - Extends: ADR 0019 and ADR 0020
@@ -36,3 +36,17 @@ Python wheels exist that bundle a PostgreSQL server with the pgvector extension 
 
 - Which embedded package to pin, after checking its maintenance and its PostgreSQL and pgvector versions.
 - Whether `provena status` should start a stopped embedded server or only report it.
+
+## Package evaluation (2026-11-27)
+
+The decision requires a pinned wheel that bundles PostgreSQL with pgvector, runs without root, and supports the platforms and Python versions the connector supports. None of the candidates met that:
+
+| Package | Finding |
+|---|---|
+| `pgserver` 0.1.4 | Last release June 2024; no wheels for Python 3.12 or newer. |
+| `pgserver-search` 0.1.6 | Bundles pgvector, but wheels stop at Python 3.13 and cover only Linux x86-64 and macOS arm64, so `pipx` on a current distribution (Python 3.14) cannot install it. |
+| `pg0-embedded` 0.18.1 (MIT) | Python-independent wheels for macOS, Linux, and Windows. On first start it unpacks PostgreSQL 18.7 (about 91 MB) into `~/.pg0`. pgvector is not bundled; it is fetched at runtime from a third-party extension index. Starting an instance failed on Arch Linux because the bundled `libreadline` is injected into the system shell (`undefined symbol: rl_print_keybinding`). |
+
+The PostgreSQL 18.7 binaries unpacked by `pg0` did run when started directly, with pgvector 0.8.1 built from its official source, and the full Provena test suite passed against them, including every real-PostgreSQL integration test. The approach is viable; the packaging is not.
+
+Implementation waits until one of these holds: a maintained wheel bundles pgvector and supports Python 3.11 to 3.14 on Linux and macOS; or `pg0-embedded` bundles pgvector and fixes the shell library injection. An alternative that would need a separate decision is using a PostgreSQL and pgvector installed through the system package manager (for example Homebrew), started by Provena as a user-owned cluster.

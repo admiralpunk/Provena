@@ -130,6 +130,7 @@ jobs:
           dist/*
           deploy/compose.yaml
           deploy/compose.ollama.yaml
+          deploy/compose.host-ollama.yaml
           default.env.example
           --verify-tag
           --generate-notes

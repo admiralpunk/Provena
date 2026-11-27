@@ -80,7 +80,7 @@ provena quickstart codex
 
 Use `provena quickstart claude` or `provena quickstart gemini` for those hosts. Quickstart starts the local service, PostgreSQL, Ollama, and the console; creates agent and reviewer credentials; and installs MCP plus automatic capture and retrieval hooks. It prints the console URL. Restart your agent host and review Provena under `/hooks` and `/mcp`.
 
-The first run downloads the default models (about 1.26 GB). The local Ollama image is a [digest-pinned CPU build](docs/adr/0022-cpu-only-ollama-image-for-local-setup.md). Installing the package alone does not record conversations; running quickstart is the opt-in step.
+Quickstart no longer waits for the default models (about 1.26 GB): they download in the background while Provena already records every turn and recalls with keyword search. When `provena status` shows `memory_models` ready, run `provena catch-up --host <host>` to extract what was captured meanwhile. If Ollama already runs on your machine, quickstart uses it instead, which keeps GPU acceleration on Macs; otherwise it uses a [digest-pinned CPU build](docs/adr/0022-cpu-only-ollama-image-for-local-setup.md). Use `--no-local-models` to skip models entirely, or `--wait-for-models` for the previous blocking behavior. Installing the package alone does not record conversations; running quickstart is the opt-in step.
 
 To check that the API and database are running:
 
@@ -125,11 +125,11 @@ Replace `codex` with `claude` or `gemini` as needed. For another MCP client, use
 
 ## FAQ
 
-**Do I need Docker?** Yes, for now. Quickstart runs PostgreSQL, Ollama, and the console in Docker Compose. A lighter install is being explored.
+**Do I need Docker?** Yes, for now. Quickstart runs PostgreSQL, the API, and the console with Docker Compose. A Docker-free mode is planned (ADR 0024), but no embedded PostgreSQL package meets its requirements yet.
 
 **Does it send my conversations anywhere?** No. By default everything runs on your machine, and extraction uses local Ollama models. A hosted model is opt-in.
 
-**How big is the download?** The default local models total about 1.26 GB, downloaded on first run. Extraction runs on CPU.
+**How big is the download?** The default local models total about 1.26 GB, but quickstart doesn't wait for them: recall uses keyword search until they're ready. With `--no-local-models` there is no model download at all. If Ollama already runs on your machine with these models, nothing is downloaded.
 
 **Does installing the package start recording?** No. Capture starts only after you run `provena quickstart` or `provena connect --install` for a host.
 

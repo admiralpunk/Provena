@@ -10,6 +10,10 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Add `--plugin` to `provena quickstart claude` and `provena connect claude`. It writes the protected connection file and removes Provena hooks and the MCP entry that an earlier user-scoped install added, so turns are not captured twice.
 - Add `--host HOST` to `provena-mcp`, `provena-agent-context`, and `provena-agent-capture` to read the connection file that onboarding wrote for that host. Hooks stay inert, and exit successfully, until it exists.
 - `provena status` warns when the plugin and user-scoped hooks would capture every turn twice.
+- Quickstart no longer blocks on the 1.26 GB model download. Models download in the background, an Ollama already running on the machine is reused, and `--no-local-models` runs without models (ADR 0025). `--wait-for-models` keeps the previous behavior.
+- Text recall falls back to audited PostgreSQL full-text search (`method = fulltext`) when no model is configured or models are not ready yet.
+- Add `provena catch-up` and `POST /scopes/{id}/catch-up` to extract turns captured before models were ready and embed claims that lack embeddings, including claims saved with `memory_remember`, which previously could not be found by semantic search.
+- `provena status` reports whether the memory models are ready (`GET /intelligence`).
 
 ### Fixed
 

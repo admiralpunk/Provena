@@ -176,7 +176,8 @@ def test_quickstart_dispatches_selected_host_installer(monkeypatch, tmp_path):
         "provena.cli.install_host",
         lambda host, *args, **kwargs: calls.append(("install", host)) or {"connection_file": "/config/claude.json"},
     )
-    monkeypatch.setattr("provena.cli.start_automatic_memory_and_console", lambda state_dir: None)
+    monkeypatch.setattr("provena.cli.host_ollama_models", lambda: None)
+    monkeypatch.setattr("provena.cli.start_memory_and_console", lambda state_dir, mode: calls.append(("models", mode)))
     monkeypatch.setattr("provena.cli.wait_until_ready", lambda api_url: None)
 
     result = _quickstart_command(
@@ -186,6 +187,65 @@ def test_quickstart_dispatches_selected_host_installer(monkeypatch, tmp_path):
     assert result == 0
     assert ("tools", "claude") in calls
     assert ("install", "claude") in calls
+    assert ("models", "background") in calls
+
+
+def test_quickstart_falls_back_to_the_ollama_container_when_host_ollama_is_unreachable(monkeypatch, tmp_path, capsys):
+    from provena.cli import _start_models
+
+    modes = []
+    monkeypatch.setattr("provena.cli.start_memory_and_console", lambda state_dir, mode: modes.append(mode))
+    monkeypatch.setattr("provena.cli.wait_until_ready", lambda api_url: None)
+    monkeypatch.setattr("provena.cli.api_reaches_ollama", lambda state_dir: False)
+    monkeypatch.setattr("provena.cli.pull_host_models_in_background", lambda state_dir, models: False)
+
+    assert _start_models(tmp_path, "host", {"qwen2.5:1.5b", "nomic-embed-text:latest"}) == "background"
+    assert modes == ["host", "background"]
+    assert "OLLAMA_HOST=0.0.0.0" in capsys.readouterr().out
+
+
+def test_quickstart_keeps_host_ollama_when_the_container_reaches_it(monkeypatch, tmp_path, capsys):
+    from provena.cli import _start_models
+
+    modes = []
+    monkeypatch.setattr("provena.cli.start_memory_and_console", lambda state_dir, mode: modes.append(mode))
+    monkeypatch.setattr("provena.cli.wait_until_ready", lambda api_url: None)
+    monkeypatch.setattr("provena.cli.api_reaches_ollama", lambda state_dir: True)
+    pulled = []
+    monkeypatch.setattr("provena.cli.pull_host_models_in_background", lambda state_dir, models: pulled.extend(models) or True)
+
+    assert _start_models(tmp_path, "host", {"nomic-embed-text:latest"}) == "host"
+    assert modes == ["host"]
+    assert pulled == ["qwen2.5:1.5b"]
+
+
+def test_catch_up_repeats_batches_until_nothing_is_pending(monkeypatch, tmp_path, capsys):
+    from provena.cli import _catch_up_command
+
+    scope_id = str(uuid4())
+    responses = iter([
+        {"extracted_events": 25, "still_failing_events": 0, "embedded_claims": 25, "more_pending": True},
+        {"extracted_events": 3, "still_failing_events": 1, "embedded_claims": 2, "more_pending": False},
+    ])
+    requests = []
+    monkeypatch.setattr("provena.cli.request_json", lambda url, path, **kwargs: requests.append((url, path, kwargs)) or next(responses))
+    config = tmp_path / "claude.json"
+    config.write_text(json.dumps({"api_url": "http://memory.test", "api_key": "agent-key", "scope_id": scope_id, "agent_host": "claude"}))
+
+    assert _catch_up_command(Namespace(host=None, config=str(config), api_url="http://ignored", max_batches=10)) == 0
+
+    assert [path for _, path, _ in requests] == [f"/scopes/{scope_id}/catch-up"] * 2
+    assert requests[0][0] == "http://memory.test" and requests[0][2]["headers"] == {"X-API-Key": "agent-key"}
+    summary = json.loads(capsys.readouterr().out)
+    assert summary == {"status": "done", "extracted_events": 28, "still_failing_events": 1, "embedded_claims": 27, "embedding_error": None}
+
+
+def test_catch_up_explains_missing_host_setup(monkeypatch, tmp_path):
+    from provena.cli import _catch_up_command
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    with pytest.raises(RuntimeError, match="provena quickstart claude --plugin"):
+        _catch_up_command(Namespace(host="claude", config=None, api_url="http://127.0.0.1:8000", max_batches=1))
 
 
 def test_quickstart_reuses_a_valid_connection_from_another_host(monkeypatch, tmp_path):
@@ -217,3 +277,22 @@ def test_quickstart_reuses_a_valid_connection_from_another_host(monkeypatch, tmp
         "PROVENA_AGENT_HOST": "codex",
         "PROVENA_ORG_ID": "organization-id",
     }
+
+
+def test_status_reports_memory_model_readiness_and_tolerates_older_servers(monkeypatch, capsys):
+    from provena.cli import _status_command
+
+    monkeypatch.setattr("provena.cli.claude_duplicate_capture", lambda: False)
+    answers = {"/health": {"status": "ok"}, "/ready": {"status": "ready"}, "/intelligence": {"provider": "configured", "ready": False}}
+    monkeypatch.setattr("provena.cli.request_json", lambda url, path, **kwargs: answers[path])
+    assert _status_command(Namespace(api_url="http://127.0.0.1:8000")) == 0
+    assert json.loads(capsys.readouterr().out)["memory_models"] == {"provider": "configured", "ready": False}
+
+    def older_server(url, path, **kwargs):
+        if path == "/intelligence":
+            raise RuntimeError("Provena returned HTTP 404 for /intelligence")
+        return answers[path]
+
+    monkeypatch.setattr("provena.cli.request_json", older_server)
+    assert _status_command(Namespace(api_url="http://127.0.0.1:8000")) == 0
+    assert json.loads(capsys.readouterr().out)["memory_models"]["ready"] is None

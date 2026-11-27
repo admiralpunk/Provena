@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -11,11 +12,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping
 
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
-RELEASE_FILES = ("compose.yaml", "compose.ollama.yaml")
+RELEASE_FILES = ("compose.yaml", "compose.ollama.yaml", "compose.host-ollama.yaml")
 
 
 def default_state_dir(environ: Mapping[str, str] | None = None) -> Path:
@@ -92,10 +93,12 @@ def prepare_release(version: str, state_dir: Path) -> dict[str, str]:
     return read_env(env_path)
 
 
-def compose_command(state_dir: Path, *, ollama: bool = False) -> list[str]:
+def compose_command(state_dir: Path, *, ollama: bool = False, host_ollama: bool = False) -> list[str]:
     command = ["docker", "compose", "--project-directory", str(state_dir), "-f", str(state_dir / "compose.yaml")]
     if ollama:
         command.extend(("-f", str(state_dir / "compose.ollama.yaml")))
+    if host_ollama:
+        command.extend(("-f", str(state_dir / "compose.host-ollama.yaml")))
     return command
 
 
@@ -185,3 +188,87 @@ def start_automatic_memory_and_console(
         env=compose_environment(state_dir),
         check=True,
     )
+
+
+# --- ADR 0025: how local models are provided -------------------------------------------
+
+HOST_OLLAMA_URL = "http://127.0.0.1:11434"
+DEFAULT_MODELS = ("qwen2.5:1.5b", "nomic-embed-text")
+MODEL_MODES = ("background", "wait", "none", "host")
+
+
+def host_ollama_models(url: str = HOST_OLLAMA_URL, timeout: float = 2) -> set[str] | None:
+    """Return model names served by an Ollama already running on this machine, or None."""
+    try:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=timeout) as response:
+            document = json.load(response)
+    except (OSError, urllib.error.URLError, ValueError):
+        return None
+    models = document.get("models", []) if isinstance(document, dict) else []
+    return {str(model.get("name")) for model in models if isinstance(model, dict) and model.get("name")}
+
+
+def missing_models(available: set[str], wanted: tuple[str, ...] = DEFAULT_MODELS) -> list[str]:
+    return [name for name in wanted if name not in available and f"{name}:latest" not in available]
+
+
+def pull_host_models_in_background(state_dir: Path, models: list[str], *, popen: Callable[..., Any] = subprocess.Popen) -> bool:
+    """Start detached `ollama pull` processes; their output goes to state_dir/ollama-pull.log."""
+    if not models or not shutil.which("ollama"):
+        return False
+    log = open(state_dir / "ollama-pull.log", "a")
+    for model in models:
+        popen(["ollama", "pull", model], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+    return True
+
+
+def choose_model_mode(*, no_local_models: bool, wait_for_models: bool, allow_host_ollama: bool, host_models: set[str] | None) -> str:
+    if no_local_models:
+        return "none"
+    if wait_for_models:
+        return "wait"
+    if allow_host_ollama and host_models is not None:
+        return "host"
+    return "background"
+
+
+def api_reaches_ollama(state_dir: Path, *, runner: Runner = subprocess.run) -> bool:
+    """Check from inside the API container that its configured Ollama answers."""
+    probe = "import os, urllib.request; urllib.request.urlopen(os.environ['OLLAMA_BASE_URL'].rstrip('/') + '/api/version', timeout=3)"
+    result = runner(
+        [*compose_command(state_dir, host_ollama=True), "exec", "-T", "api", "python", "-c", probe],
+        cwd=state_dir,
+        env=compose_environment(state_dir),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def start_memory_and_console(state_dir: Path, mode: str, *, runner: Runner = subprocess.run) -> None:
+    """Start the console and provide models according to MODE without waiting for downloads.
+
+    - none: the API keeps MEMORY_PROVIDER=none; recall uses full-text search.
+    - background: start the Ollama container and its model download, then switch the
+      API to Ollama immediately; extraction and semantic recall work once models arrive.
+    - host: point the API at an Ollama server already running on this machine.
+    - wait: the previous behaviour, which blocks until both models are downloaded.
+    """
+    environment = compose_environment(state_dir)
+    if mode == "wait":
+        start_automatic_memory_and_console(state_dir, runner=runner)
+        return
+    if mode == "none":
+        runner([*compose_command(state_dir), "--profile", "console", "up", "-d"], cwd=state_dir, env=environment, check=True)
+        return
+    if mode == "background":
+        command = compose_command(state_dir, ollama=True)
+        runner([*command, "up", "-d", "ollama-models"], cwd=state_dir, env=environment, check=True)
+        runner([*command, "--profile", "console", "up", "-d", "--no-deps", "api", "console"], cwd=state_dir, env=environment, check=True)
+        return
+    if mode == "host":
+        command = compose_command(state_dir, host_ollama=True)
+        runner([*command, "--profile", "console", "up", "-d", "--no-deps", "api", "console"], cwd=state_dir, env=environment, check=True)
+        return
+    raise ValueError(f"unknown model mode: {mode}")
