@@ -42,6 +42,17 @@ If an Ollama server already runs on your machine, quickstart uses it (with GPU a
 
 Restart the selected host and review Provena under `/hooks` and `/mcp`. You can then use the agent normally: prompts and final responses are captured as immutable evidence, candidate facts are extracted, and relevant claims are added to later turns without requiring you to mention Provena. The command prints the exact console URL when setup completes.
 
+### Run without Docker
+
+Install PostgreSQL 16 or newer and pgvector with your package manager (for example `brew install postgresql@18 pgvector`, or `sudo apt install postgresql-17 postgresql-17-pgvector`), then:
+
+```bash
+pipx install 'provena-agent-memory[server]'
+provena quickstart codex --no-docker
+```
+
+Provena creates a private, password-protected database that only accepts local connections, in its own state folder, and starts the API beside it. `provena stop` and `provena start` control both. The web console needs Docker for now.
+
 ### Connect to an existing Provena service
 
 Ask your operator for the API URL, agent API key, and project or branch scope ID. Then run:

@@ -14,6 +14,9 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 - Text recall falls back to audited PostgreSQL full-text search (`method = fulltext`) when no model is configured or models are not ready yet.
 - Add `provena catch-up` and `POST /scopes/{id}/catch-up` to extract turns captured before models were ready and embed claims that lack embeddings, including claims saved with `memory_remember`, which previously could not be found by semantic search.
 - `provena status` reports whether the memory models are ready (`GET /intelligence`).
+- Add a Docker-free mode, `provena quickstart HOST --no-docker` (ADR 0026). It finds a PostgreSQL 16+ with pgvector from Homebrew, apt, or pacman (never installing it), creates a private cluster bound to 127.0.0.1 with SCRAM authentication and no Unix socket, applies migrations, and starts the API. `provena start`, `provena stop`, and `provena status` manage it; a changed PostgreSQL major version is refused instead of upgraded.
+- Ship the database migrations in the wheel, so the API can migrate without the container image.
+- CI runs the full test suite against PostgreSQL 16, 17, and 18 from the PostgreSQL apt repository, on clusters started by Provena's own code.
 
 ### Fixed
 

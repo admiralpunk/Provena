@@ -105,6 +105,22 @@ provena quickstart claude --plugin   # or, for an existing service: provena conn
 
 On Claude Code versions older than 2.1.275, run `/plugin marketplace add admiralpunk/Provena` and then `/plugin install provena@provena`. The plugin adds the MCP server, the capture and recall hooks, and two skills: `/provena:status` checks the setup, and `/provena:why <topic>` explains why a memory exists. The `--plugin` option writes only the protected connection file and removes Provena hooks that an earlier quickstart added, so turns are never captured twice. The plugin requires Provena 0.1.16 or later.
 
+### Without Docker
+
+If you'd rather not use Docker, Provena can run on the PostgreSQL and pgvector from your package manager. It finds them but never installs them:
+
+```bash
+brew install postgresql@18 pgvector                         # macOS
+sudo apt install postgresql-17 postgresql-17-pgvector       # Debian 13
+sudo apt install postgresql-16 postgresql-16-pgvector       # Ubuntu 24.04
+sudo pacman -S postgresql pgvector                          # Arch
+
+pipx install 'provena-agent-memory[server]'
+provena quickstart claude --no-docker --plugin   # or: codex, gemini (without --plugin)
+```
+
+Provena creates a private database in its own state folder that only accepts local, password-authenticated connections, and starts the API beside it. Use `provena stop` and `provena start` to stop and start both; they don't restart after a reboot on their own. If Ollama runs on your machine, Provena uses it; otherwise recall uses keyword search. The web console still needs Docker in this mode. Requires PostgreSQL 16 or newer and Provena 0.1.16 or later. [Design](docs/adr/0026-system-postgresql-local-mode.md)
+
 ### Connect to an existing service
 
 Ask its operator for an API URL, **agent** API key, and project or branch scope ID. With the connector installed, run:
@@ -125,7 +141,7 @@ Replace `codex` with `claude` or `gemini` as needed. For another MCP client, use
 
 ## FAQ
 
-**Do I need Docker?** Yes, for now. Quickstart runs PostgreSQL, the API, and the console with Docker Compose. A Docker-free mode is planned (ADR 0024), but no embedded PostgreSQL package meets its requirements yet.
+**Do I need Docker?** No. The default quickstart uses Docker Compose, but `--no-docker` runs Provena on the PostgreSQL and pgvector from your package manager (see [Without Docker](#without-docker)). The web console still needs Docker.
 
 **Does it send my conversations anywhere?** No. By default everything runs on your machine, and extraction uses local Ollama models. A hosted model is opt-in.
 

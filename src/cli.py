@@ -17,7 +17,8 @@ from uuid import UUID
 
 from .integrations.connection_config import SUPPORTED_CONNECTION_HOSTS, default_config_home, load_connection_environment, load_host_connection, setup_hint
 from .integrations.host_setup import claude_duplicate_capture, install_claude_plugin_connection, install_host
-from .quickstart import api_reaches_ollama, choose_model_mode, default_state_dir, host_ollama_models, missing_models, prepare_release, pull_host_models_in_background, require_local_tools, start_core, start_memory_and_console, update_env, wait_until_ready
+from . import local_server
+from .quickstart import DEFAULT_MODELS, HOST_OLLAMA_URL, api_reaches_ollama, choose_model_mode, default_state_dir, host_ollama_models, missing_models, prepare_release, pull_host_models_in_background, require_local_tools, start_core, start_memory_and_console, update_env, wait_until_ready
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
@@ -193,9 +194,16 @@ def _warn_if_duplicate_capture() -> None:
 
 
 def _status_command(args: argparse.Namespace) -> int:
+    local_state = default_local_state_dir()
+    if local_server.is_system_mode(local_state) and not local_server.api_pid(local_state):
+        print(json.dumps({"api_url": args.api_url, "local_service": local_server.service_status(local_state)}, indent=2))
+        return 1
     liveness = request_json(args.api_url, "/health")
     readiness = request_json(args.api_url, "/ready")
     result: dict[str, Any] = {"api_url": args.api_url, "liveness": liveness, "readiness": readiness}
+    local_state = default_local_state_dir()
+    if local_server.is_system_mode(local_state):
+        result["local_service"] = local_server.service_status(local_state)
     try:
         result["memory_models"] = request_json(args.api_url, "/intelligence")
     except RuntimeError:
@@ -343,6 +351,13 @@ def _ensure_console_reviewer(
     )
 
 
+NO_DOCKER_NOTE = (
+    "Provena runs without Docker. It stops on reboot: run `provena start` to start it again and `provena stop` to stop it. "
+    "The web console needs Docker for now; review claims through the API until a Docker-free console exists. "
+    "Without an Ollama on this machine, recall uses keyword search; install Ollama and rerun quickstart to add extraction."
+)
+
+
 MODEL_MODE_NOTES = {
     "background": (
         "Local models are downloading in the background (about 1.26 GB). Provena already records every turn and recalls "
@@ -388,16 +403,71 @@ def _start_models(state_dir: Path, mode: str, host_models: set[str] | None) -> s
     return mode
 
 
+def default_local_state_dir() -> Path:
+    """State for the Docker-free mode lives beside, never inside, the Docker state (ADR 0026)."""
+    return default_state_dir().parent / "provena-local"
+
+
+def _state_dir(args: argparse.Namespace, *, no_docker: bool) -> Path:
+    chosen = getattr(args, "state_dir", None) or (default_local_state_dir() if no_docker else default_state_dir())
+    return Path(chosen).expanduser().resolve()
+
+
+def _local_memory_settings(args: argparse.Namespace) -> tuple[str, dict[str, str], set[str] | None]:
+    """Model settings for the Docker-free API, which can only use a host Ollama."""
+    if getattr(args, "no_local_models", False):
+        return "none", {"MEMORY_PROVIDER": "none"}, None
+    host_models = None if getattr(args, "no_host_ollama", False) else host_ollama_models()
+    if host_models is None:
+        return "none", {"MEMORY_PROVIDER": "none"}, None
+    settings = {"MEMORY_PROVIDER": "ollama", "OLLAMA_BASE_URL": HOST_OLLAMA_URL, "EXTRACTION_MODEL": DEFAULT_MODELS[0], "EMBEDDING_MODEL": DEFAULT_MODELS[1]}
+    return "host", settings, host_models
+
+
+def _start_command(args: argparse.Namespace) -> int:
+    state_dir = _state_dir(args, no_docker=True)
+    info = local_server.start_service(state_dir)
+    local_server.wait_for_api()
+    print(json.dumps({"status": "running", "state_dir": str(state_dir), **info}, indent=2, default=str))
+    return 0
+
+
+def _stop_command(args: argparse.Namespace) -> int:
+    state_dir = _state_dir(args, no_docker=True)
+    if not local_server.is_system_mode(state_dir):
+        raise RuntimeError(f"No Docker-free Provena in {state_dir}. For the Docker setup, use `docker compose` in its state directory.")
+    print(json.dumps({"state_dir": str(state_dir), **local_server.stop_service(state_dir)}, indent=2))
+    return 0
+
+
 def _quickstart_command(args: argparse.Namespace) -> int:
     if getattr(args, "plugin", False):
         _require_plugin_host(args.client)
-    require_local_tools(args.client)
-    state_dir = Path(args.state_dir).expanduser().resolve()
+    no_docker = getattr(args, "no_docker", False)
+    state_dir = _state_dir(args, no_docker=no_docker)
     current_version = package_version()
-    print(f"Preparing Provena {current_version} in {state_dir}...")
-    deployment = prepare_release(current_version, state_dir)
-    print("Starting PostgreSQL and the Provena API...")
-    start_core(state_dir, deployment)
+    local_mode = None
+    if no_docker:
+        if not shutil.which(args.client):
+            raise RuntimeError(f"Required command not found: {args.client}")
+        local_server.require_server_dependencies()
+        print(f"Preparing Docker-free Provena {current_version} in {state_dir}...")
+        deployment = local_server.prepare_state(state_dir)
+        local_mode, memory_settings, local_host_models = _local_memory_settings(args)
+        if local_mode == "host":
+            missing = missing_models(local_host_models or set())
+            if missing and pull_host_models_in_background(state_dir, missing):
+                print(f"Pulling {', '.join(missing)} with your local Ollama in the background (log: {state_dir / 'ollama-pull.log'}).")
+        print("Starting your local PostgreSQL and the Provena API...")
+        service = local_server.start_service(state_dir, memory_settings)
+        local_server.wait_for_api()
+        print(f"Using PostgreSQL {service['postgres_major']} from {service['postgres_bindir']}.")
+    else:
+        require_local_tools(args.client)
+        print(f"Preparing Provena {current_version} in {state_dir}...")
+        deployment = prepare_release(current_version, state_dir)
+        print("Starting PostgreSQL and the Provena API...")
+        start_core(state_dir, deployment)
 
     api_url = "http://127.0.0.1:8000"
     existing = _existing_quickstart_connection(api_url, args.client)
@@ -445,14 +515,17 @@ def _quickstart_command(args: argparse.Namespace) -> int:
             capture_command=installed_command("provena-agent-capture"),
         )
         print(f"Configured {args.client.title()} MCP plus automatic memory capture and retrieval.")
-    mode = _start_models(state_dir, mode, host_models)
+    if local_mode is None:
+        mode = _start_models(state_dir, mode, host_models)
+    else:
+        mode = local_mode
     wait_until_ready(api_url)
     print(
         json.dumps(
             {
                 "status": "ready",
                 "api_url": api_url,
-                "console_url": f"http://127.0.0.1:3000/overview?scope={scope_id}",
+                "console_url": None if no_docker else f"http://127.0.0.1:3000/overview?scope={scope_id}",
                 "scope_id": scope_id,
                 "state_dir": str(state_dir),
                 "memory_models": mode,
@@ -462,7 +535,10 @@ def _quickstart_command(args: argparse.Namespace) -> int:
         )
     )
     print(PLUGIN_INSTALL_INSTRUCTION if getattr(args, "plugin", False) else _host_restart_instruction(args.client), file=sys.stderr)
-    print(MODEL_MODE_NOTES[mode].format(client=args.client), file=sys.stderr)
+    if not (no_docker and mode == "none" and not getattr(args, "no_local_models", False)):
+        print(MODEL_MODE_NOTES[mode].format(client=args.client), file=sys.stderr)
+    if no_docker:
+        print(NO_DOCKER_NOTE, file=sys.stderr)
     if not getattr(args, "plugin", False):
         _warn_if_duplicate_capture()
     return 0
@@ -502,7 +578,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     quickstart = commands.add_parser("quickstart", help="Start local Provena and configure automatic agent memory.")
     quickstart.add_argument("client", nargs="?", choices=("codex", "claude", "gemini"), default="codex")
-    quickstart.add_argument("--state-dir", default=str(default_state_dir()))
+    quickstart.add_argument("--state-dir", default=None, help="Where Provena keeps its deployment state (default depends on --no-docker).")
+    quickstart.add_argument("--no-docker", action="store_true", help="Run PostgreSQL and the API as local processes using your system PostgreSQL 16+ with pgvector (ADR 0026).")
     quickstart.add_argument("--organization", default="Local development")
     quickstart.add_argument("--project", default="provena-demo")
     quickstart.add_argument("--plugin", action="store_true", help="Claude Code only: prepare the Provena plugin instead of installing user-scoped hooks.")
@@ -510,6 +587,14 @@ def build_parser() -> argparse.ArgumentParser:
     models.add_argument("--no-local-models", action="store_true", help="Run without Ollama: record every turn and recall with keyword search.")
     models.add_argument("--wait-for-models", action="store_true", help="Block until the local models finish downloading (previous behaviour).")
     quickstart.add_argument("--no-host-ollama", action="store_true", help="Ignore an Ollama already running on this machine and use the container.")
+
+    start = commands.add_parser("start", help="Start the Docker-free Provena service (PostgreSQL and API).")
+    start.add_argument("--state-dir", default=None)
+    start.set_defaults(handler=_start_command)
+
+    stop = commands.add_parser("stop", help="Stop the Docker-free Provena service.")
+    stop.add_argument("--state-dir", default=None)
+    stop.set_defaults(handler=_stop_command)
 
     catch_up = commands.add_parser("catch-up", help="Extract turns captured before models were ready and embed unembedded claims.")
     catch_up.add_argument("--host", choices=SUPPORTED_CONNECTION_HOSTS, help="Use the connection file onboarding wrote for this host.")

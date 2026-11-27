@@ -1,6 +1,6 @@
 # ADR 0026: Docker-free local mode with system PostgreSQL
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-27
 - Preserves: ADR 0001 (single store) and every database invariant
 - Alternative to: ADR 0024 (embedded PostgreSQL), whose implementation is blocked
@@ -70,3 +70,14 @@ Two facts shape the design. The published wheel contains the API code but not th
 
 - Whether `provena start` should run automatically from the capture hook when the API is down, or only report it.
 - Whether to support Fedora and Windows in the first version, and with which packages.
+
+## Implementation notes
+
+- `provena.local_server` implements discovery, the cluster, and supervision. `PROVENA_PG_BINDIR` is checked first; the chosen directory is recorded in the state file so restarts use the same server.
+- pgvector is checked twice: for `vector.control` before anything is created, and in the running server through `pg_available_extensions`.
+- The cluster uses `initdb --auth=scram-sha-256` with a password file that is deleted immediately, and starts with `listen_addresses=127.0.0.1` and `unix_socket_directories=''` on a free port. The data directory is mode 0700 and the state file 0600. `PG_VERSION` in the data directory is the major-version lock.
+- The API runs as `python -m uvicorn provena.api:app --host 127.0.0.1 --port 8000` with the connector's own interpreter. Stale `DATABASE_URL`, model, and API-key variables from the shell are removed from its environment. Its memory settings are stored in the state file so `provena start` restores them.
+- Migrations ship in the wheel as `provena.migrations`, mapped from `alembic/` by setuptools, so the container and development layouts do not change. In an editable install they are found in the repository's `alembic/` directory.
+- The Docker-free state directory defaults to `provena-local` beside the Docker state directory. Quickstart refuses to use a Docker state directory for this mode.
+- In this mode a host Ollama is reached directly at `127.0.0.1:11434`; without one, recall uses the ADR 0025 full-text fallback.
+- Tested end to end with PostgreSQL 18.7 and pgvector 0.8.1: quickstart, plugin capture and recall hooks, stop, restart with data intact, and the full test suite against the Provena-started cluster. CI adds PostgreSQL 16, 17, and 18 from the PostgreSQL apt repository.
