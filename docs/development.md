@@ -110,6 +110,17 @@ Do not put a human reviewer key in an agent configuration. Changing the embeddin
 
 ## Tests and release checks
 
+To run the database tests without Docker, point Provena at a PostgreSQL 16+ installation with pgvector and let it start a private cluster, as CI does:
+
+```bash
+export PROVENA_PG_BINDIR=/usr/lib/postgresql/17/bin   # or $(brew --prefix postgresql@18)/bin
+url=$(.venv/bin/python -m provena.local_server /tmp/provena-test-state | python -c 'import json,sys; print(json.load(sys.stdin)["database_url"])')
+DATABASE_URL=$url .venv/bin/alembic upgrade head
+TEST_DATABASE_URL=$url PROVENA_PG_BINDIR=$PROVENA_PG_BINDIR .venv/bin/pytest -q
+```
+
+With `PROVENA_PG_BINDIR` set, the suite also runs the Docker-free end-to-end test, which needs port 8000 free. Otherwise use Docker:
+
 From the repository root, start PostgreSQL and create a disposable integration-test database:
 
 ```bash

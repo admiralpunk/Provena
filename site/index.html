@@ -387,7 +387,7 @@
         <h3>Does it send my conversations anywhere?</h3>
         <p>No. By default everything runs on your machine, and extraction uses local Ollama models. A hosted model is opt-in.</p>
         <h3>Do I need Docker?</h3>
-        <p>Yes, for now. Quickstart runs PostgreSQL, the API, and the console with Docker Compose. A Docker-free mode is planned.</p>
+        <p>No. Quickstart uses Docker by default, but <code>--no-docker</code> runs Provena on the PostgreSQL and pgvector from Homebrew, apt, or pacman. The web console still needs Docker.</p>
         <h3>How big is the download?</h3>
         <p>The local models total about 1.26 GB, but quickstart doesn’t wait for them: recall uses keyword search until they’re ready. If Ollama already runs on your machine, Provena uses it. Prefer no models? Use <code>--no-local-models</code>.</p>
       </div>

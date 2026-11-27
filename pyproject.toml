@@ -73,11 +73,16 @@ packages = [
   "provena.memory",
   "provena.persistence",
   "provena.web",
+  "provena.migrations",
+  "provena.migrations.versions",
 ]
-package-dir = {provena = "src"}
+# Migrations stay in alembic/ for the container and development; the wheel also
+# ships them so the Docker-free local mode can migrate its database (ADR 0026).
+package-dir = {provena = "src", "provena.migrations" = "alembic", "provena.migrations.versions" = "alembic/versions"}
 
 [tool.setuptools.package-data]
 provena = ["py.typed"]
+"provena.migrations" = ["script.py.mako"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
