@@ -268,7 +268,8 @@ def start_postgres(state_dir: Path, bindir: Path, *, run: Runner = subprocess.ru
     if not port:
         port = free_port()
         update_env(state_dir / ".env", {"PROVENA_PG_PORT": str(port)})
-    options = f"-p {port} -c listen_addresses=127.0.0.1 -c unix_socket_directories=''"
+    # UTC like the container image, so API timestamps never carry the machine's local offset.
+    options = f"-p {port} -c listen_addresses=127.0.0.1 -c unix_socket_directories='' -c timezone=UTC -c log_timezone=UTC"
     result = run(
         [str(bindir / "pg_ctl"), "-D", str(data_dir(state_dir)), "-l", str(state_dir / "logs" / "postgres.log"), "-o", options, "-w", "-t", "60", "start"],
         text=True,
