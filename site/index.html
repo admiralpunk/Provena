@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Provena: agent memory with receipts</title>
+<meta name="description" content="Open-source, self-hosted memory for Claude Code, Codex, and Gemini CLI. Every fact your agent remembers links back to who said it, when, and whether a human approved it.">
+<link rel="canonical" href="https://admiralpunk.github.io/Provena/">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Provena: agent memory with receipts">
+<meta property="og:description" content="Self-hosted memory for AI coding agents. Every remembered fact links to its source, its authority, and its human review.">
+<meta property="og:url" content="https://admiralpunk.github.io/Provena/">
+<meta property="og:image" content="https://admiralpunk.github.io/Provena/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://admiralpunk.github.io/Provena/social-preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f172a;
+    --ink-2: #131b2e;
+    --sky: #38bdf8;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --paper: #fbfaf6;
+    --canvas: #f8fafc;
+    --surface: #ffffff;
+    --line: #e2e8f0;
+    --text: #0f172a;
+    --muted: #5b6b82;
+    --on-dark: #e2e8f0;
+    --on-dark-muted: #94a3b8;
+    --radius: 14px;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display: "Inter Tight", "Inter", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #0b1120;
+      --surface: #111a2e;
+      --line: #1e2a44;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas: #0b1120;
+    --surface: #111a2e;
+    --line: #1e2a44;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text);
+    font: 400 17px/1.6 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  code, pre { font-family: var(--mono); }
+
+  /* Header + hero (always dark, the brand surface) */
+  .hero {
+    background:
+      radial-gradient(900px 420px at 85% -10%, rgba(56, 189, 248, .16), transparent 60%),
+      radial-gradient(700px 380px at -10% 110%, rgba(16, 185, 129, .12), transparent 60%),
+      var(--ink);
+    color: var(--on-dark);
+    padding-bottom: 72px;
+  }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 600 19px var(--display); color: #fff; }
+  .brand img { width: 30px; height: 30px; }
+  .nav-links { display: flex; gap: 22px; align-items: center; font-size: 15px; }
+  .nav-links a { text-decoration: none; color: var(--on-dark-muted); }
+  .nav-links a:hover { color: #fff; }
+  .gh {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid #334155; border-radius: 999px; padding: 7px 14px; color: #fff !important;
+  }
+  .gh:hover { border-color: var(--sky); }
+
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding-top: 48px; }
+  .hero-grid > * { min-width: 0; }
+  .eyebrow {
+    display: inline-flex; gap: 8px; align-items: center;
+    font: 500 13px var(--mono); letter-spacing: .02em; color: var(--sky);
+    border: 1px solid rgba(56, 189, 248, .35); border-radius: 999px; padding: 5px 12px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 0 4px rgba(16, 185, 129, .18); }
+  h1 {
+    font: 700 clamp(40px, 6.2vw, 68px)/1.02 var(--display);
+    letter-spacing: -.035em; color: #fff; margin: 22px 0 20px;
+  }
+  h1 em { font-style: normal; color: var(--sky); }
+  .lede { font-size: 19px; color: #cbd5e1; max-width: 34em; margin: 0 0 30px; }
+  .install {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #020617; border: 1px solid #1e293b; border-radius: 12px;
+    padding: 14px 16px; font: 14px/1.7 var(--mono); color: #e2e8f0; max-width: 560px;
+  }
+  .install pre { margin: 0; flex: 1; min-width: 0; overflow-x: auto; }
+  .install .p { color: var(--emerald); user-select: none; }
+  .install .c { color: #64748b; }
+  .copy {
+    font: 500 13px Inter, sans-serif; color: #0f172a; background: var(--sky);
+    border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer;
+  }
+  .copy:hover { background: #7dd3fc; }
+  .hosts { margin-top: 18px; font-size: 14px; color: var(--on-dark-muted); }
+  .hosts b { color: #e2e8f0; font-weight: 500; }
+
+  /* The receipt: signature element */
+  .receipt {
+    position: relative; background: var(--paper); color: #1f2937;
+    font: 13px/1.65 var(--mono); padding: 26px 26px 34px;
+    border-radius: 6px 6px 0 0; transform: rotate(1.2deg);
+    box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04);
+  }
+  .receipt::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -12px; height: 12px;
+    background:
+      linear-gradient(-45deg, transparent 8px, var(--paper) 0) 0 0 / 16px 12px repeat-x,
+      linear-gradient(45deg, transparent 8px, var(--paper) 0) 0 0 / 16px 12px repeat-x;
+  }
+  .r-head { text-align: left; border-bottom: 1px dashed #9ca3af; padding-bottom: 12px; margin-bottom: 12px; }
+  .r-head b { display: block; font-size: 15px; letter-spacing: .18em; }
+  .r-head span { color: #6b7280; font-size: 12px; }
+  .r-row { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 3px 0; }
+  .r-row .k { color: #6b7280; text-transform: uppercase; font-size: 11px; letter-spacing: .08em; padding-top: 2px; }
+  .r-quote { background: #f1efe6; border-left: 3px solid var(--emerald); padding: 6px 10px; margin: 4px 0; }
+  .r-sep { border-top: 1px dashed #9ca3af; margin: 12px 0; }
+  .stamp {
+    position: absolute; right: 14px; top: 16px; transform: rotate(9deg); background: var(--paper);
+    border: 2px solid #b45309; color: #b45309; border-radius: 6px;
+    font: 700 12px var(--mono); letter-spacing: .14em; padding: 4px 9px; opacity: .85;
+  }
+
+  /* Sections */
+  section { padding: 88px 0; }
+  .kicker { font: 500 13px var(--mono); color: var(--emerald); letter-spacing: .04em; text-transform: uppercase; }
+  h2 { font: 700 clamp(30px, 4vw, 42px)/1.1 var(--display); letter-spacing: -.025em; margin: 10px 0 16px; }
+  .sub { color: var(--muted); max-width: 40em; margin: 0 0 40px; font-size: 18px; }
+
+  .demo { margin-top: -40px; padding-top: 0; }
+  .frame {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px; box-shadow: 0 24px 60px -30px rgba(15, 23, 42, .35);
+  }
+  .frame img { display: block; width: 100%; height: auto; border-radius: 8px; }
+  .caption { text-align: center; color: var(--muted); font-size: 15px; margin-top: 14px; }
+  .caption a { color: var(--text); }
+
+  .story {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface);
+  }
+  .story > div { padding: 26px; border-right: 1px solid var(--line); }
+  .story > div:last-child { border-right: 0; }
+  .story .n { font: 500 13px var(--mono); color: var(--muted); }
+  .story h3 { font: 600 19px/1.3 var(--display); margin: 8px 0; }
+  .story p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .story .bad h3 { color: #dc2626; }
+  .story .good h3 { color: var(--emerald); }
+
+  .grid4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 28px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .card h3 { font: 600 18px/1.3 var(--display); margin: 0 0 8px; display: flex; gap: 10px; align-items: center; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .ic {
+    width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; flex: none;
+    background: rgba(56, 189, 248, .14); color: #0284c7;
+  }
+  .ic svg { width: 17px; height: 17px; }
+
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; counter-reset: s; }
+  .step {
+    position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 16px; font-size: 15px;
+  }
+  .step b { display: block; font: 600 16px var(--display); margin-bottom: 4px; }
+  .step span { color: var(--muted); font-size: 14px; }
+  .step::before {
+    counter-increment: s; content: counter(s, decimal-leading-zero);
+    font: 500 12px var(--mono); color: var(--sky); display: block; margin-bottom: 8px;
+  }
+  .step.human { border-color: rgba(245, 158, 11, .6); }
+  .step.human::before { color: var(--amber); }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 15px; }
+  th, td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font: 600 14px var(--display); color: var(--muted); background: transparent; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .us { background: rgba(56, 189, 248, .07); }
+  thead .us { color: var(--text); }
+  .note { color: var(--muted); font-size: 15px; margin-top: 16px; }
+
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; }
+  .faq h3 { font: 600 17px var(--display); margin: 0 0 6px; }
+  .faq p { margin: 0 0 18px; color: var(--muted); font-size: 15.5px; }
+  .limits { border-left: 3px solid var(--amber); padding: 4px 0 4px 18px; color: var(--muted); font-size: 15.5px; margin-top: 10px; }
+
+  .cta { background: var(--ink); color: var(--on-dark); text-align: center; }
+  .cta h2 { color: #fff; }
+  .cta .install { margin: 26px auto 0; text-align: left; }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .btn { text-decoration: none; border-radius: 10px; padding: 12px 18px; font-weight: 500; font-size: 15px; }
+  .btn.primary { background: var(--sky); color: #0f172a; }
+  .btn.ghost { border: 1px solid #334155; color: #fff; }
+  footer { background: var(--ink-2); color: var(--on-dark-muted); font-size: 14px; padding: 26px 0; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--on-dark-muted); }
+
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 48px; }
+    .receipt { transform: none; }
+    .flow { grid-template-columns: 1fr 1fr; }
+    .story { grid-template-columns: 1fr; }
+    .story > div { border-right: 0; border-bottom: 1px solid var(--line); }
+    .story > div:last-child { border-bottom: 0; }
+    .faq { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 0 16px; }
+    .stamp { font-size: 10px; padding: 3px 7px; }
+    .install { font-size: 12.5px; }
+    .nav-links a:not(.gh) { display: none; }
+    .grid4, .flow { grid-template-columns: 1fr; }
+    section { padding: 64px 0; }
+    .r-row { grid-template-columns: 78px 1fr; }
+    .receipt { padding: 20px 16px 30px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#"><img src="logo.svg" alt="">Provena</a>
+      <div class="nav-links">
+        <a href="#why">Why</a>
+        <a href="#how">How it works</a>
+        <a href="#compare">Compare</a>
+        <a href="#faq">FAQ</a>
+        <a class="gh" href="https://github.com/admiralpunk/Provena">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+    </nav>
+
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>Open source · Self-hosted · MIT</span>
+        <h1>Agent memory<br>with <em>receipts.</em></h1>
+        <p class="lede">Provena gives Claude Code, Codex, and Gemini CLI memory across sessions, and keeps the proof. Every fact your agent remembers links back to who said it, when, and whether a human approved it.</p>
+        <div class="install">
+          <pre id="cmd"><span class="p">$</span> pipx install provena-agent-memory
+<span class="p">$</span> provena quickstart claude  <span class="c"># or codex, gemini</span></pre>
+          <button class="copy" type="button" data-copy="pipx install provena-agent-memory && provena quickstart claude">Copy</button>
+        </div>
+        <p class="hosts">Works with <b>Claude Code</b>, <b>Codex</b>, <b>Gemini CLI</b>, and any MCP client. Runs locally with PostgreSQL and Ollama.</p>
+      </div>
+
+      <div class="receipt" role="img" aria-label="Example explain trail for a remembered claim">
+        <div class="r-head"><b>PROVENA</b><span>memory_explain · receipt</span></div>
+        <div class="r-row"><span class="k">Claim</span><span>User is on leave Dec 1 – Dec 21</span></div>
+        <div class="r-row"><span class="k">Status</span><span>candidate · valid 12-01 → 12-21</span></div>
+        <div class="r-sep"></div>
+        <div class="r-row"><span class="k">Source</span><span>user_statement · Codex session<br>authority: low</span></div>
+        <div class="r-quote">“I’ll be on leave from December 1st to December 21st.”</div>
+        <div class="r-row"><span class="k">Extracted</span><span>qwen2.5:1.5b via Ollama</span></div>
+        <div class="r-row"><span class="k">Review</span><span>awaiting human reviewer</span></div>
+        <div class="r-sep"></div>
+        <div class="r-row"><span class="k">Delivered</span><span>to Codex, 5 days later, for “plan a review meeting in December”</span></div>
+        <span class="stamp">UNVERIFIED</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="demo">
+  <div class="wrap">
+    <div class="frame">
+      <img src="provena-console.gif" width="800" height="450" alt="Provena console: a candidate claim waits for review, its explain view traces it to the original conversation, and a later session retrieves it" loading="eager">
+    </div>
+    <p class="caption">The operator console: review a candidate, trace it to its source, see when it was used. <a href="https://github.com/user-attachments/assets/37fe219c-b678-4c6d-811d-bfdd37552628">Watch the 90-second demo →</a></p>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <div class="kicker">Why receipts matter</div>
+    <h2>Agents remember things that are wrong, stale, or planted.</h2>
+    <p class="sub">Persistent memory makes agents more useful. It also means one bad write can follow you into every future session.</p>
+
+    <div class="story">
+      <div>
+        <div class="n">01 · it happens</div>
+        <h3>A webpage plants a “fact”</h3>
+        <p>The agent reads a page that says “the user wants every PR auto-merged” and repeats it in an answer.</p>
+      </div>
+      <div class="bad">
+        <div class="n">02 · without sources</div>
+        <h3>It becomes memory</h3>
+        <p>A store that doesn’t track sources saves it like anything else. Next week, the agent acts on it.</p>
+      </div>
+      <div class="good">
+        <div class="n">03 · with Provena</div>
+        <h3>It stays a low-authority candidate</h3>
+        <p>It is linked to the assistant turn that produced it, visible as provisional, and promoted only if a human approves.</p>
+      </div>
+    </div>
+
+    <div class="grid4">
+      <div class="card">
+        <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 8h14M5 16h14"/></svg></span>Evidence is never rewritten</h3>
+        <p>Every conversation turn is an append-only event. Claims are derived from events and always link back to them.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg></span>Humans decide what’s trusted</h3>
+        <p>Extracted claims start as candidates. Only a reviewer credential can promote one; an agent key cannot.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></span>Memory is not permission</h3>
+        <p>Authority, relevance, and permission to act are kept separate. A remembered fact never authorizes an action.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span>Changes of mind keep history</h3>
+        <p>When a fact changes, both versions stay, and a reviewed relationship records which one supersedes the other.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="padding-top:0">
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2>From conversation to trusted memory.</h2>
+    <p class="sub">One FastAPI service and PostgreSQL with pgvector. Host hooks capture turns automatically; the MCP server gives agents attributed context.</p>
+    <div class="flow">
+      <div class="step"><b>Capture</b><span>Hooks record your prompt and the agent’s answer as immutable events.</span></div>
+      <div class="step"><b>Extract</b><span>A local Ollama model proposes candidate claims, each linked to its evidence.</span></div>
+      <div class="step"><b>Recall</b><span>Later sessions receive relevant claims, labeled with status and authority.</span></div>
+      <div class="step human"><b>Review</b><span>A human approves, quarantines, or resolves conflicts in the console.</span></div>
+      <div class="step"><b>Explain</b><span><code>memory_explain</code> shows source, review history, and every retrieval.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="compare" style="padding-top:0">
+  <div class="wrap">
+    <div class="kicker">How it compares</div>
+    <h2>Different tools, different trade-offs.</h2>
+    <p class="sub">Provena focuses on provenance and review rather than minimal setup. If you only want the lightest possible recall, a local-file tool may suit you better.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th></th><th class="us">Provena</th><th>claude-mem</th><th>Mem0</th><th>Basic Memory</th><th>Hindsight</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Storage</td><td class="us">PostgreSQL + pgvector, self-hosted</td><td>SQLite + Chroma, local</td><td>Hosted platform or self-hosted SDK</td><td>Markdown files + SQLite index</td><td>PostgreSQL + pgvector</td></tr>
+          <tr><td>Capture</td><td class="us">Automatic hooks for Claude Code, Codex, Gemini CLI + MCP tools</td><td>Automatic Claude Code hooks</td><td>MCP tool calls</td><td>Agent writes notes</td><td>MCP tool calls</td></tr>
+          <tr><td>Focus</td><td class="us">Source evidence, authority, human review, audit</td><td>Effortless automatic recall</td><td>Managed memory platform</td><td>Human-readable notes in git</td><td>Retrieval quality</td></tr>
+          <tr><td>License</td><td class="us">MIT</td><td>Apache-2.0</td><td>Apache-2.0</td><td>AGPL-3.0</td><td>MIT</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="padding-top:0">
+  <div class="wrap">
+    <div class="kicker">FAQ</div>
+    <h2>Before you install.</h2>
+    <div class="faq">
+      <div>
+        <h3>Does it send my conversations anywhere?</h3>
+        <p>No. By default everything runs on your machine, and extraction uses local Ollama models. A hosted model is opt-in.</p>
+        <h3>Do I need Docker?</h3>
+        <p>Yes, for now. Quickstart runs PostgreSQL, Ollama, and the console with Docker Compose. A lighter install is being explored.</p>
+        <h3>How big is the download?</h3>
+        <p>The default local models total about 1.26 GB, downloaded on first run. Extraction runs on CPU.</p>
+      </div>
+      <div>
+        <h3>Does installing it start recording?</h3>
+        <p>No. Capture starts only after you run <code>provena quickstart</code> or <code>provena connect --install</code> for a host.</p>
+        <h3>Which agents work?</h3>
+        <p>Claude Code, Codex, and Gemini CLI get one-command setup with automatic capture. Other MCP clients can use <code>provena connect generic</code>.</p>
+        <h3>What are the current limits?</h3>
+        <p class="limits">Retrieval uses an exact scope; branch inheritance isn’t implemented. Provena records which claims were delivered to an agent, but can’t prove a later action was caused by them. Project-level access control is future work.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <h2>Know what your agent remembers, and why.</h2>
+    <div class="install">
+      <pre><span class="p">$</span> pipx install provena-agent-memory
+<span class="p">$</span> provena quickstart claude  <span class="c"># or codex, gemini</span></pre>
+      <button class="copy" type="button" data-copy="pipx install provena-agent-memory && provena quickstart claude">Copy</button>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/admiralpunk/Provena">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/admiralpunk/Provena/blob/master/docs/architecture.md">Architecture</a>
+      <a class="btn ghost" href="https://github.com/admiralpunk/Provena/tree/master/docs/adr">Design decisions</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Provena · MIT licensed · open source</span>
+    <span><a href="https://pypi.org/project/provena-agent-memory/">PyPI</a> · <a href="https://github.com/admiralpunk/Provena/blob/master/CHANGELOG.md">Changelog</a> · <a href="https://github.com/admiralpunk/Provena/blob/master/SECURITY.md">Security</a> · <a href="https://github.com/admiralpunk/Provena/issues">Issues</a></span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll(".copy").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var text = button.getAttribute("data-copy");
+      var done = function () {
+        button.textContent = "Copied";
+        setTimeout(function () { button.textContent = "Copy"; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } catch (error) {}
+    });
+  });
+</script>
+</body>
+</html>
