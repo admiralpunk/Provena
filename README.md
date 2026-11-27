@@ -82,6 +82,8 @@ Use `provena quickstart claude` or `provena quickstart gemini` for those hosts. 
 
 Quickstart no longer waits for the default models (about 1.26 GB): they download in the background while Provena already records every turn and recalls with keyword search. When `provena status` shows `memory_models` ready, run `provena catch-up --host <host>` to extract what was captured meanwhile. If Ollama already runs on your machine, quickstart uses it instead, which keeps GPU acceleration on Macs; otherwise it uses a [digest-pinned CPU build](docs/adr/0022-cpu-only-ollama-image-for-local-setup.md). Use `--no-local-models` to skip models entirely, or `--wait-for-models` for the previous blocking behavior. Installing the package alone does not record conversations; running quickstart is the opt-in step.
 
+To see in 30 seconds why receipts matter, run `provena demo --host codex` (or `claude`, `gemini`). It works in a separate demo project, stores one fact you stated and one planted by a web page, and prints a receipt for each. To trace any real memory back to its source, run `provena why <topic or claim ID>`.
+
 To check that the API and database are running:
 
 ```bash

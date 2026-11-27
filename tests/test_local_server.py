@@ -168,6 +168,7 @@ def test_system_postgres_service_end_to_end(tmp_path):
         assert info["cluster_created"] is True and info["postgres_major"] >= 16
         assert stat.S_IMODE((state / "postgres").stat().st_mode) == 0o700
         assert "unix_socket_directories" in (state / "postgres" / "postmaster.opts").read_text()
+        assert "timezone=UTC" in (state / "postgres" / "postmaster.opts").read_text()
         assert "scram-sha-256" in (state / "postgres" / "pg_hba.conf").read_text()
         assert "trust" not in [line.split()[-1] for line in (state / "postgres" / "pg_hba.conf").read_text().splitlines() if line.strip() and not line.startswith("#")]
 
