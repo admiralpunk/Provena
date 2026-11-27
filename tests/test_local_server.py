@@ -29,10 +29,10 @@ def _fake_postgres(root: Path, major: int, *, pgvector: bool = True) -> Path:
     return bindir
 
 
-def test_explicit_bindir_is_searched_first(tmp_path):
+def test_explicit_bindir_is_the_only_candidate(tmp_path):
     first = _fake_postgres(tmp_path / "a", 17)
-    candidates = ls.candidate_bindirs({"PROVENA_PG_BINDIR": str(first), "PATH": ""}, run=lambda *a, **k: subprocess.CompletedProcess(a, 1, "", ""))
-    assert candidates[0] == first
+    candidates = ls.candidate_bindirs({"PROVENA_PG_BINDIR": str(first), "PATH": "/usr/bin"}, run=lambda *a, **k: subprocess.CompletedProcess(a, 1, "", ""))
+    assert candidates == [first]
 
 
 def test_find_postgres_accepts_16_plus_with_pgvector(tmp_path):
