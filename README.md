@@ -11,6 +11,7 @@
 [![CI](https://github.com/admiralpunk/Provena/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/admiralpunk/Provena/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/provena-agent-memory)](https://pypi.org/project/provena-agent-memory/)
 [![M8ven Score](https://m8ven.ai/badge/mcp/admiralpunk/provena)](https://m8ven.ai/mcp/admiralpunk/provena)
+[![Glama MCP server](https://glama.ai/mcp/servers/admiralpunk/Provena/badges/score.svg)](https://glama.ai/mcp/servers/admiralpunk/Provena)
 
 Provena is open-source, self-hosted memory for AI coding agents. It plugs into **Claude Code, Codex, and Gemini CLI** (and any MCP client), captures your conversations, and brings relevant context into later sessions. Unlike a plain memory store, it keeps the receipts: each remembered claim stays linked to the original words it came from, how much that source can be trusted, and its review history.
 
