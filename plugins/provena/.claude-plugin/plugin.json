@@ -1,7 +1,7 @@
 {
   "name": "provena",
   "displayName": "Provena",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Agent memory with receipts: capture Claude Code turns as append-only evidence, recall attributed context, and explain why any memory exists.",
   "author": {
     "name": "admiralpunk",

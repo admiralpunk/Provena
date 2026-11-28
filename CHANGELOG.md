@@ -4,6 +4,8 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-28
+
 ### Added
 
 - `provena why <topic or claim ID>` prints a receipt for matching memories: the source words, authority, extraction, reviews, conflicts, deliveries to agents, and plain trust warnings. It searches through the operator API, so looking something up never records an agent retrieval.
