@@ -216,7 +216,8 @@ def pull_host_models_in_background(state_dir: Path, models: list[str], *, popen:
     """Start detached `ollama pull` processes; their output goes to state_dir/ollama-pull.log."""
     if not models or not shutil.which("ollama"):
         return False
-    log = open(state_dir / "ollama-pull.log", "a")
+    descriptor = os.open(state_dir / "ollama-pull.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    log = os.fdopen(descriptor, "a")
     for model in models:
         popen(["ollama", "pull", model], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
     return True

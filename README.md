@@ -123,7 +123,7 @@ pipx install 'provena-agent-memory[server]'
 provena quickstart claude --no-docker --plugin   # or: codex, gemini (without --plugin)
 ```
 
-Provena creates a private database in its own state folder that only accepts local, password-authenticated connections, and starts the API beside it. Use `provena stop` and `provena start` to stop and start both; they don't restart after a reboot on their own. If Ollama runs on your machine, Provena uses it; otherwise recall uses keyword search. The web console still needs Docker in this mode. Requires PostgreSQL 16 or newer and Provena 0.1.17 or later. [Design](docs/adr/0026-system-postgresql-local-mode.md)
+Provena creates a private database in its own state folder that only accepts local, password-authenticated connections, and starts the API beside it. It does not use the default database that Homebrew creates on install (in `$(brew --prefix)/var/postgresql@18`); `brew uninstall` leaves that folder behind. Use `provena stop` and `provena start` to stop and start both; they don't restart after a reboot on their own. If Ollama runs on your machine, Provena uses it; otherwise recall uses keyword search. The web console still needs Docker in this mode. Requires PostgreSQL 16 or newer and Provena 0.1.17 or later. [Design](docs/adr/0026-system-postgresql-local-mode.md)
 
 ### Connect to an existing service
 

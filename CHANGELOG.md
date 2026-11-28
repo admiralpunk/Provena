@@ -13,6 +13,7 @@ All notable user-facing changes are recorded here. Provena follows semantic vers
 
 ### Fixed
 
+- The Docker-free state folder and its `logs/` folder are now owner-only (0700), and `api.log` and the Ollama pull log are 0600. They were readable by other users on the machine, as a macOS test showed. Existing installs are corrected the next time Provena starts.
 - The Docker-free PostgreSQL cluster runs in UTC, like the container image, so API timestamps no longer carry the machine's local offset.
 
 ## [0.1.17] - 2026-11-27

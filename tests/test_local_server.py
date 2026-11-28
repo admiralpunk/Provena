@@ -84,6 +84,25 @@ def test_prepare_state_creates_protected_secrets_once(tmp_path):
     assert stat.S_IMODE((tmp_path / "state" / ".env").stat().st_mode) == 0o600
 
 
+def test_state_and_logs_are_private_even_if_created_loosely(tmp_path):
+    state = tmp_path / "state"
+    (state / "logs").mkdir(parents=True)
+    state.chmod(0o755)
+    (state / "logs").chmod(0o755)
+    loose = state / "logs" / "api.log"
+    loose.write_text("old line\n")
+    loose.chmod(0o644)
+
+    ls.prepare_state(state)
+    with ls.private_append(loose) as handle:
+        handle.write("new line\n")
+
+    assert stat.S_IMODE(state.stat().st_mode) == 0o700
+    assert stat.S_IMODE((state / "logs").stat().st_mode) == 0o700
+    assert stat.S_IMODE(loose.stat().st_mode) == 0o600
+    assert loose.read_text() == "old line\nnew line\n"
+
+
 def test_prepare_state_refuses_a_docker_state_directory(tmp_path):
     (tmp_path / "compose.yaml").write_text("services: {}\n")
     (tmp_path / ".env").write_text("POSTGRES_PASSWORD=x\n")
@@ -167,6 +186,7 @@ def test_system_postgres_service_end_to_end(tmp_path, capsys):
         ls.wait_for_api()
         assert info["cluster_created"] is True and info["postgres_major"] >= 16
         assert stat.S_IMODE((state / "postgres").stat().st_mode) == 0o700
+        assert stat.S_IMODE((state / "logs" / "api.log").stat().st_mode) == 0o600
         assert "unix_socket_directories" in (state / "postgres" / "postmaster.opts").read_text()
         assert "timezone=UTC" in (state / "postgres" / "postmaster.opts").read_text()
         assert "scram-sha-256" in (state / "postgres" / "pg_hba.conf").read_text()

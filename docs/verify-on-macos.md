@@ -49,10 +49,12 @@ python3 -m venv "$PV/venv"
 "$PV/venv/bin/pip" install --quiet 'provena-agent-memory[server]'
 export PATH="$PV/venv/bin:$PATH"
 provena --version
+provena --help | grep -q ' why ' || "$PV/venv/bin/pip" install --quiet --force-reinstall 'provena-agent-memory[server] @ git+https://github.com/admiralpunk/Provena@master'
+provena --version
 echo "Sandbox: $PV"
 ```
 
-Expected: `provena 0.1.17` or newer.
+Expected: a version of 0.1.18 or newer, or `0.1.17` reinstalled from `master`. Steps 5 and 6 need the `demo` and `why` commands, which were added after the 0.1.17 release; the line above installs them from the repository's `master` branch when the published package doesn't have them yet.
 
 ## Step 3: quickstart without Docker
 
@@ -137,7 +139,7 @@ provena stop
 rm -rf "$PV"
 ```
 
-Homebrew packages stay installed. If the owner wants them removed: `brew uninstall pgvector postgresql@18`.
+Homebrew packages stay installed. If the owner wants them removed: `brew uninstall pgvector postgresql@18`. Installing `postgresql@18` also created an unused default database at `$(brew --prefix)/var/postgresql@18` (about 39 MB) that `brew uninstall` leaves behind; delete that folder too if removing everything. Provena never uses it.
 
 ## Report
 

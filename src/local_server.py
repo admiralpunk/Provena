@@ -178,6 +178,20 @@ def migrations_location() -> Path:
 # --- state ---------------------------------------------------------------------------
 
 
+def private_dir(path: Path) -> Path:
+    """Create PATH owner-only (0700), and correct an existing one: it holds memory data and logs."""
+    path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
+    return path
+
+
+def private_append(path: Path):
+    """Open a log for appending, owner-read/write only (0600), correcting an existing file."""
+    handle = os.fdopen(os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600), "a")
+    path.chmod(0o600)
+    return handle
+
+
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.bind(("127.0.0.1", 0))
@@ -187,8 +201,8 @@ def free_port() -> int:
 def prepare_state(state_dir: Path) -> dict[str, str]:
     """Create or reuse the protected state file for the Docker-free mode."""
 
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / "logs").mkdir(exist_ok=True)
+    private_dir(state_dir)
+    private_dir(state_dir / "logs")
     env_path = state_dir / ".env"
     if not env_path.exists():
         env_path.touch(mode=0o600)
@@ -363,7 +377,7 @@ def start_api(state_dir: Path, memory: Mapping[str, str], *, popen: Callable[...
     if running:
         return running
     values = read_env(state_dir / ".env")
-    log = open(state_dir / "logs" / "api.log", "a")
+    log = private_append(private_dir(state_dir / "logs") / "api.log")
     process = popen(
         [sys.executable, "-m", "uvicorn", "provena.api:app", "--host", "127.0.0.1", "--port", str(API_PORT)],
         env=api_environment(values, memory),
